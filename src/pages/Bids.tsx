@@ -23,19 +23,17 @@ interface BidWithStartup {
   };
 
   investor: {
+    id: string;
     full_name: string;
     email: string;
-  };
+  } | null;
 }
 
 export function Bids() {
-  const { profile, user } = useAuth();
+  const { profile } = useAuth();
 
   const [bids, setBids] = useState<BidWithStartup[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const [rejectingBidId, setRejectingBidId] = useState<string | null>(null);
-  const [rejectMessage, setRejectMessage] = useState("");
 
   const navigate = useNavigate();
 
@@ -51,19 +49,19 @@ export function Bids() {
     /* ---------- INVESTOR VIEW ---------- */
 
     if (profile.role === "investor") {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("bids")
         .select(
           `
           *,
           startup:startups(id, company_name, logo_url),
-          investor:profiles!bids_investor_id_fkey(full_name, email)
+          investor:profiles!bids_investor_id_fkey(id, full_name, email)
         `,
         )
         .eq("investor_id", profile.id)
         .order("created_at", { ascending: false });
 
-      if (data) fetchedBids = data;
+      if (!error && data) fetchedBids = data;
     }
 
     /* ---------- STARTUP VIEW ---------- */
@@ -77,21 +75,23 @@ export function Bids() {
       if (startups && startups.length > 0) {
         const startupIds = startups.map((s) => s.id);
 
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from("bids")
           .select(
             `
             *,
             startup:startups(id, company_name, logo_url),
-            investor:profiles!bids_investor_id_fkey(full_name, email)
+            investor:profiles!bids_investor_id_fkey(id, full_name, email)
           `,
           )
           .in("startup_id", startupIds)
           .order("created_at", { ascending: false });
 
-        if (data) fetchedBids = data;
+        if (!error && data) fetchedBids = data;
       }
     }
+
+    console.log("Fetched Bids:", fetchedBids);
 
     setBids(fetchedBids);
     setLoading(false);
@@ -104,28 +104,6 @@ export function Bids() {
       .eq("id", bidId);
 
     if (!error) loadBids();
-  };
-
-  const handleRejectBid = async (bid: BidWithStartup) => {
-    if (!user) return;
-
-    const { error } = await supabase
-      .from("bids")
-      .update({ status: "rejected" })
-      .eq("id", bid.id);
-
-    if (!error && rejectMessage.trim()) {
-      await supabase.from("chat_messages").insert({
-        sender_id: user.id,
-        receiver_id: bid.investor_id,
-        message: `Regarding your bid on ${bid.startup.company_name}: ${rejectMessage}`,
-        read: false,
-      });
-    }
-
-    setRejectingBidId(null);
-    setRejectMessage("");
-    loadBids();
   };
 
   if (loading) {
@@ -157,7 +135,7 @@ export function Bids() {
           <Card className="p-12 text-center">
             <TrendingUp className="text-slate-600 mx-auto mb-4" size={48} />
 
-            <h3 className="text-xl font-semibold text-white mb-2">
+            <h3 className="text-xl font-semibold text-white mb-4">
               No Bids Yet
             </h3>
 
@@ -172,7 +150,9 @@ export function Bids() {
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center space-x-4 mb-4">
-                      <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg" />
+                      <div className="w-12 h-12 flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg text-white font-bold">
+                        {bid.investor?.full_name?.charAt(0) || "I"}
+                      </div>
 
                       <div>
                         <h3 className="text-lg font-semibold text-white">
@@ -180,7 +160,8 @@ export function Bids() {
                         </h3>
 
                         <p className="text-sm text-slate-400">
-                          Investor: {bid.investor?.full_name}
+                          Investor:{" "}
+                          {bid.investor?.full_name || "Unknown Investor"}
                         </p>
                       </div>
                     </div>
@@ -242,7 +223,7 @@ export function Bids() {
                       <Button
                         size="sm"
                         variant="danger"
-                        onClick={() => setRejectingBidId(bid.id)}
+                        onClick={() => updateBidStatus(bid.id, "rejected")}
                       >
                         Reject
                       </Button>

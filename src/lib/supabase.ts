@@ -1,14 +1,22 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = "https://dummy.supabase.co";
-const supabaseAnonKey = "dummy-key";
+// Load Supabase credentials from .env
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-console.warn("Supabase disabled for demo - using dummy client");
-
+// Create Supabase client
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// =============================
+// TYPES
+// =============================
 
 export type UserRole = "investor" | "startup" | "admin";
 export type VerificationStatus = "pending" | "verified" | "rejected";
+
+// =============================
+// PROFILE
+// =============================
 
 export interface Profile {
   id: string;
@@ -23,6 +31,10 @@ export interface Profile {
   created_at: string;
   updated_at: string;
 }
+
+// =============================
+// STARTUP
+// =============================
 
 export interface Startup {
   id: string;
@@ -50,6 +62,10 @@ export interface Startup {
   updated_at: string;
 }
 
+// =============================
+// BID
+// =============================
+
 export interface Bid {
   id: string;
   investor_id: string;
@@ -61,6 +77,10 @@ export interface Bid {
   created_at: string;
   updated_at: string;
 }
+
+// =============================
+// INVESTMENT
+// =============================
 
 export interface Investment {
   id: string;

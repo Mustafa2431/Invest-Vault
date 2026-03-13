@@ -1,65 +1,218 @@
-import { useState } from 'react';
-import { Send, Brain, Loader } from 'lucide-react';
-import { DashboardLayout } from '../components/layout/DashboardLayout';
-import { Card } from '../components/ui/Card';
-import { Button } from '../components/ui/Button';
+import { useState, useRef, useEffect } from "react";
+import {
+  Send,
+  Brain,
+  Sparkles,
+  TrendingUp,
+  Shield,
+  DollarSign,
+  PieChart,
+} from "lucide-react";
+import { DashboardLayout } from "../components/layout/DashboardLayout";
 
 interface Message {
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
+  timestamp: Date;
+}
+
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+const SYSTEM_PROMPT = `You are an expert AI investment assistant for Invest Vault, a fintech platform that connects startups with investors. 
+
+Your role is to:
+- Help investors understand startup metrics, valuations, equity, and investment strategies
+- Guide startup founders on fundraising, pitch preparation, and investor relations
+- Explain financial concepts in beginner-friendly language
+- Provide insights on portfolio diversification, risk management, and due diligence
+- Answer questions about the bidding process, KYC verification, and platform features
+
+Always be professional, concise, and helpful. When discussing numbers, use clear examples. Never provide specific financial advice that could be considered personalized investment recommendations — always remind users to consult a financial advisor for personalized guidance.`;
+
+const QUICK_PROMPTS = [
+  { icon: <DollarSign size={14} />, text: "What is startup valuation?" },
+  { icon: <TrendingUp size={14} />, text: "How do I evaluate a startup?" },
+  { icon: <PieChart size={14} />, text: "How does equity work?" },
+  { icon: <Shield size={14} />, text: "What are the investment risks?" },
+];
+
+function TypingIndicator() {
+  return (
+    <div className="flex justify-start">
+      <div className="flex items-start gap-3 max-w-[80%]">
+        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 mt-1">
+          <Brain size={14} className="text-white" />
+        </div>
+        <div className="bg-slate-800/70 border border-slate-700/50 rounded-2xl rounded-tl-sm px-4 py-3">
+          <div className="flex gap-1 items-center h-4">
+            <div
+              className="w-2 h-2 rounded-full bg-blue-400 animate-bounce"
+              style={{ animationDelay: "0ms" }}
+            />
+            <div
+              className="w-2 h-2 rounded-full bg-blue-400 animate-bounce"
+              style={{ animationDelay: "150ms" }}
+            />
+            <div
+              className="w-2 h-2 rounded-full bg-blue-400 animate-bounce"
+              style={{ animationDelay: "300ms" }}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MessageBubble({
+  message,
+  isUser,
+}: {
+  message: Message;
+  isUser: boolean;
+}) {
+  const formattedContent = message.content
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.*?)\*/g, "<em>$1</em>")
+    .replace(
+      /`(.*?)`/g,
+      '<code class="bg-slate-700/60 px-1 rounded text-blue-300 text-sm font-mono">$1</code>',
+    )
+    .replace(/\n/g, "<br/>");
+
+  return (
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+      <div
+        className={`flex items-start gap-3 max-w-[80%] ${isUser ? "flex-row-reverse" : "flex-row"}`}
+      >
+        {!isUser && (
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 mt-1">
+            <Brain size={14} className="text-white" />
+          </div>
+        )}
+        {isUser && (
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-600 to-slate-700 flex items-center justify-center flex-shrink-0 mt-1 text-slate-300 text-xs font-bold">
+            You
+          </div>
+        )}
+        <div
+          className={`rounded-2xl px-4 py-3 ${
+            isUser
+              ? "bg-blue-600 text-white rounded-tr-sm"
+              : "bg-slate-800/70 border border-slate-700/50 text-slate-200 rounded-tl-sm"
+          }`}
+        >
+          <p
+            className="text-sm leading-relaxed"
+            dangerouslySetInnerHTML={{ __html: formattedContent }}
+          />
+          <p
+            className={`text-xs mt-1.5 ${isUser ? "text-blue-200" : "text-slate-500"}`}
+          >
+            {message.timestamp.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function AIAssistant() {
   const [messages, setMessages] = useState<Message[]>([
     {
-      role: 'assistant',
-      content: 'Hello! I\'m your AI investment assistant. I can help you understand investment terms, analyze startup metrics, and guide you through the investment process. How can I help you today?',
+      role: "assistant",
+      content:
+        "Hello! I'm your AI investment assistant powered by Gemini. I can help you understand investment terms, analyze startup metrics, guide you through the bidding process, and much more.\n\nWhat would you like to know today?",
+      timestamp: new Date(),
     },
   ]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const predefinedQuestions = [
-    'What is startup valuation?',
-    'How do I evaluate a startup?',
-    'What is equity and how does it work?',
-    'What are the risks of startup investing?',
-    'How do I diversify my portfolio?',
-  ];
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
+
+  const sendToGemini = async (userMessage: string, history: Message[]) => {
+    const conversationHistory = history.slice(1).map((msg) => ({
+      role: msg.role === "assistant" ? "model" : "user",
+      parts: [{ text: msg.content }],
+    }));
+
+    const requestBody = {
+      system_instruction: {
+        parts: [{ text: SYSTEM_PROMPT }],
+      },
+      contents: [
+        ...conversationHistory,
+        {
+          role: "user",
+          parts: [{ text: userMessage }],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 1024,
+      },
+    };
+
+    const response = await fetch(GEMINI_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData?.error?.message || "Gemini API error");
+    }
+
+    const data = await response.json();
+    return (
+      data.candidates?.[0]?.content?.parts?.[0]?.text ||
+      "Sorry, I could not generate a response."
+    );
+  };
 
   const handleSend = async (question?: string) => {
-    const userMessage = question || input;
-    if (!userMessage.trim()) return;
+    const userMessage = question || input.trim();
+    if (!userMessage || loading) return;
 
-    setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
-    setInput('');
+    const newUserMessage: Message = {
+      role: "user",
+      content: userMessage,
+      timestamp: new Date(),
+    };
+
+    const updatedMessages = [...messages, newUserMessage];
+    setMessages(updatedMessages);
+    setInput("");
     setLoading(true);
 
     try {
-      const response = await fetch('/api/ai-assistant', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMessage, history: messages }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setMessages((prev) => [...prev, { role: 'assistant', content: data.response }]);
-      } else {
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: 'assistant',
-            content: getLocalResponse(userMessage),
-          },
-        ]);
-      }
-    } catch (error) {
+      const responseText = await sendToGemini(userMessage, updatedMessages);
       setMessages((prev) => [
         ...prev,
         {
-          role: 'assistant',
-          content: getLocalResponse(userMessage),
+          role: "assistant",
+          content: responseText,
+          timestamp: new Date(),
+        },
+      ]);
+    } catch (error) {
+      console.error("Gemini API error:", error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `I encountered an error connecting to the AI service. Please check your API key configuration or try again later.\n\n*Error: ${error instanceof Error ? error.message : "Unknown error"}*`,
+          timestamp: new Date(),
         },
       ]);
     } finally {
@@ -67,109 +220,111 @@ export function AIAssistant() {
     }
   };
 
-  const getLocalResponse = (question: string) => {
-    const lowerQuestion = question.toLowerCase();
-
-    if (lowerQuestion.includes('valuation')) {
-      return 'Startup valuation is the process of determining the current worth of a startup company. It considers factors like revenue, growth rate, market size, team experience, and comparable company valuations. Common methods include the venture capital method, discounted cash flow, and market multiples approach.';
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
     }
-
-    if (lowerQuestion.includes('evaluate') || lowerQuestion.includes('analyze')) {
-      return 'When evaluating a startup, consider: 1) Team quality and experience, 2) Market size and growth potential, 3) Product-market fit and traction, 4) Business model and unit economics, 5) Competitive advantage, 6) Financial metrics (revenue, growth rate, burn rate), 7) Exit potential. Always conduct thorough due diligence before investing.';
-    }
-
-    if (lowerQuestion.includes('equity')) {
-      return 'Equity represents ownership in a company. When you invest in a startup, you receive equity (shares) in exchange for your capital. The percentage of equity determines your ownership stake and potential returns if the company succeeds. For example, if you own 5% equity and the company is acquired for $10M, your shares would be worth $500K (minus any preferences or dilution).';
-    }
-
-    if (lowerQuestion.includes('risk')) {
-      return 'Startup investing carries significant risks: 1) High failure rate (most startups fail), 2) Illiquidity (cannot easily sell your shares), 3) Dilution (your ownership may decrease in future rounds), 4) Long time horizon (5-10 years to exit), 5) Total loss potential. Only invest money you can afford to lose and diversify your portfolio.';
-    }
-
-    if (lowerQuestion.includes('diversif')) {
-      return 'Portfolio diversification reduces risk by spreading investments across multiple startups. Best practices: 1) Invest in different industries, 2) Mix different stages (early, growth, late), 3) Limit any single investment to 5-10% of portfolio, 4) Consider geographical diversity, 5) Balance high-risk/high-reward with safer bets. Aim for at least 10-15 startups in your portfolio.';
-    }
-
-    return 'That\'s a great question! I can help you with information about startup investing, valuation, equity, risk management, and portfolio strategy. Feel free to ask specific questions about these topics or any startup-related financial concepts.';
   };
+
+  const showQuickPrompts = messages.length === 1;
 
   return (
     <DashboardLayout>
-      <div className="p-8 h-[calc(100vh-4rem)]">
-        <div className="max-w-4xl mx-auto h-full flex flex-col">
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold text-white mb-2">AI Investment Assistant</h1>
-            <p className="text-slate-400">Get expert guidance on startup investing</p>
-          </div>
-
-          <Card className="flex-1 flex flex-col overflow-hidden">
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {messages.map((message, index) => (
-                <div
-                  key={index}
-                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div
-                    className={`max-w-[80%] rounded-lg p-4 ${
-                      message.role === 'user'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-slate-800/50 text-slate-200'
-                    }`}
-                  >
-                    {message.role === 'assistant' && (
-                      <div className="flex items-center space-x-2 mb-2">
-                        <Brain size={16} className="text-blue-400" />
-                        <span className="text-sm font-medium text-blue-400">AI Assistant</span>
-                      </div>
-                    )}
-                    <p className="leading-relaxed">{message.content}</p>
-                  </div>
-                </div>
-              ))}
-
-              {loading && (
-                <div className="flex justify-start">
-                  <div className="bg-slate-800/50 rounded-lg p-4">
-                    <Loader className="animate-spin text-blue-400" size={20} />
-                  </div>
-                </div>
-              )}
+      <div className="p-6 h-screen flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4 flex-shrink-0">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-white">
+                AI Investment Assistant
+              </h1>
+              <span className="flex items-center gap-1 px-2 py-0.5 bg-blue-600/20 border border-blue-500/30 rounded-full text-xs text-blue-400">
+                <Sparkles size={10} />
+                Gemini Powered
+              </span>
             </div>
+            <p className="text-slate-400 text-sm mt-0.5">
+              Expert guidance on startup investing
+            </p>
+          </div>
+        </div>
 
-            {messages.length === 1 && (
-              <div className="p-6 border-t border-slate-700">
-                <p className="text-sm text-slate-400 mb-3">Try asking:</p>
-                <div className="flex flex-wrap gap-2">
-                  {predefinedQuestions.map((question) => (
+        {/* Chat Container */}
+        <div className="flex-1 bg-slate-800/30 border border-slate-700/50 rounded-2xl flex flex-col overflow-hidden">
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            {messages.map((message, index) => (
+              <MessageBubble
+                key={index}
+                message={message}
+                isUser={message.role === "user"}
+              />
+            ))}
+
+            {loading && <TypingIndicator />}
+
+            {/* Quick prompts shown only at start */}
+            {showQuickPrompts && !loading && (
+              <div className="pt-4">
+                <p className="text-xs text-slate-500 mb-3 text-center">
+                  Try asking about:
+                </p>
+                <div className="flex flex-wrap gap-2 justify-center">
+                  {QUICK_PROMPTS.map((prompt) => (
                     <button
-                      key={question}
-                      onClick={() => handleSend(question)}
-                      className="px-3 py-2 bg-slate-800/50 hover:bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-300 transition-all"
+                      key={prompt.text}
+                      onClick={() => handleSend(prompt.text)}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-slate-800/50 hover:bg-slate-700/60 border border-slate-700 hover:border-blue-500/50 rounded-full text-xs text-slate-300 hover:text-white transition-all duration-200"
                     >
-                      {question}
+                      <span className="text-blue-400">{prompt.icon}</span>
+                      {prompt.text}
                     </button>
                   ))}
                 </div>
               </div>
             )}
 
-            <div className="p-6 border-t border-slate-700">
-              <div className="flex space-x-3">
-                <input
-                  type="text"
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input Area */}
+          <div className="p-4 border-t border-slate-700/50 bg-slate-900/30">
+            <div className="flex items-end gap-3">
+              <div className="flex-1 relative">
+                <textarea
+                  ref={inputRef}
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-                  placeholder="Ask me anything about startup investing..."
-                  className="flex-1 px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    e.target.style.height = "auto";
+                    e.target.style.height =
+                      Math.min(e.target.scrollHeight, 120) + "px";
+                  }}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Ask me anything about startup investing... (Enter to send, Shift+Enter for new line)"
+                  rows={1}
+                  className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 resize-none transition-all text-sm leading-relaxed"
                   disabled={loading}
+                  style={{ minHeight: "48px", maxHeight: "120px" }}
                 />
-                <Button onClick={() => handleSend()} disabled={loading || !input.trim()}>
-                  <Send size={20} />
-                </Button>
               </div>
+              <button
+                onClick={() => handleSend()}
+                disabled={loading || !input.trim()}
+                className="flex-shrink-0 w-11 h-11 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed rounded-xl flex items-center justify-center transition-all duration-200 shadow-lg shadow-blue-500/20 disabled:shadow-none"
+              >
+                <Send
+                  size={18}
+                  className={loading ? "text-slate-500" : "text-white"}
+                />
+              </button>
             </div>
-          </Card>
+            <p className="text-xs text-slate-600 mt-2 text-center">
+              AI responses are for informational purposes only. Consult a
+              financial advisor for personalized advice.
+            </p>
+          </div>
         </div>
       </div>
     </DashboardLayout>

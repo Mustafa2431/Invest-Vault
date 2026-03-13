@@ -1,72 +1,79 @@
-import { useEffect, useState } from 'react';
-import { DashboardLayout } from '../components/layout/DashboardLayout';
-import { Card } from '../components/ui/Card';
-import { Input } from '../components/ui/Input';
-import { Select } from '../components/ui/Select';
-import { Button } from '../components/ui/Button';
-import { useAuth } from '../contexts/AuthContext';
-import { supabase, Startup } from '../lib/supabase';
+import { useEffect, useState } from "react";
+import { DashboardLayout } from "../components/layout/DashboardLayout";
+import { Card } from "../components/ui/Card";
+import { Input } from "../components/ui/Input";
+import { Select } from "../components/ui/Select";
+import { Button } from "../components/ui/Button";
+import { useAuth } from "../contexts/AuthContext";
+import { supabase, Startup } from "../lib/supabase";
 
 export function MyStartup() {
   const { profile } = useAuth();
-  const [startup, setStartup] = useState<Startup | null>(null);
+
+  const [startups, setStartups] = useState<Startup[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [editingStartup, setEditingStartup] = useState<Startup | null>(null);
+
   const [formData, setFormData] = useState({
-    company_name: '',
-    tagline: '',
-    description: '',
-    industry: 'Technology',
-    stage: 'idea',
-    location: '',
-    website: '',
-    funding_goal: '',
-    valuation: '',
-    equity_offered: '',
-    revenue: '',
-    monthly_growth: '',
-    team_size: '1',
-    business_model: '',
-    market_size: '',
+    company_name: "",
+    tagline: "",
+    description: "",
+    industry: "Technology",
+    stage: "idea",
+    location: "",
+    website: "",
+    funding_goal: "",
+    valuation: "",
+    equity_offered: "",
+    revenue: "",
+    monthly_growth: "",
+    team_size: "1",
+    business_model: "",
+    market_size: "",
   });
 
   useEffect(() => {
     if (profile) {
-      loadStartup();
+      loadStartups();
     }
   }, [profile]);
 
-  const loadStartup = async () => {
+  const loadStartups = async () => {
     if (!profile) return;
 
     const { data } = await supabase
-      .from('startups')
-      .select('*')
-      .eq('founder_id', profile.id)
-      .maybeSingle();
+      .from("startups")
+      .select("*")
+      .eq("founder_id", profile.id);
 
     if (data) {
-      setStartup(data);
-      setFormData({
-        company_name: data.company_name,
-        tagline: data.tagline || '',
-        description: data.description,
-        industry: data.industry,
-        stage: data.stage,
-        location: data.location || '',
-        website: data.website || '',
-        funding_goal: data.funding_goal.toString(),
-        valuation: data.valuation.toString(),
-        equity_offered: data.equity_offered?.toString() || '',
-        revenue: data.revenue.toString(),
-        monthly_growth: data.monthly_growth.toString(),
-        team_size: data.team_size.toString(),
-        business_model: data.business_model || '',
-        market_size: data.market_size || '',
-      });
+      setStartups(data);
     }
 
     setLoading(false);
+  };
+
+  const handleEdit = (startup: Startup) => {
+    setEditingStartup(startup);
+
+    setFormData({
+      company_name: startup.company_name,
+      tagline: startup.tagline || "",
+      description: startup.description,
+      industry: startup.industry,
+      stage: startup.stage,
+      location: startup.location || "",
+      website: startup.website || "",
+      funding_goal: startup.funding_goal.toString(),
+      valuation: startup.valuation.toString(),
+      equity_offered: startup.equity_offered?.toString() || "",
+      revenue: startup.revenue.toString(),
+      monthly_growth: startup.monthly_growth.toString(),
+      team_size: startup.team_size.toString(),
+      business_model: startup.business_model || "",
+      market_size: startup.market_size || "",
+    });
   };
 
   const handleSave = async () => {
@@ -80,31 +87,56 @@ export function MyStartup() {
         founder_id: profile.id,
         funding_goal: parseFloat(formData.funding_goal),
         valuation: parseFloat(formData.valuation),
-        equity_offered: formData.equity_offered ? parseFloat(formData.equity_offered) : null,
-        revenue: parseFloat(formData.revenue || '0'),
-        monthly_growth: parseFloat(formData.monthly_growth || '0'),
+        equity_offered: formData.equity_offered
+          ? parseFloat(formData.equity_offered)
+          : null,
+        revenue: parseFloat(formData.revenue || "0"),
+        monthly_growth: parseFloat(formData.monthly_growth || "0"),
         team_size: parseInt(formData.team_size),
-        status: 'active',
+        status: "active",
       };
 
-      if (startup) {
+      if (editingStartup) {
         const { error } = await supabase
-          .from('startups')
+          .from("startups")
           .update(startupData)
-          .eq('id', startup.id);
+          .eq("id", editingStartup.id);
 
         if (error) throw error;
+
+        alert("Startup updated successfully!");
       } else {
-        const { error } = await supabase.from('startups').insert(startupData);
+        const { error } = await supabase.from("startups").insert(startupData);
 
         if (error) throw error;
+
+        alert("Startup added successfully!");
       }
 
-      alert('Startup profile saved successfully!');
-      loadStartup();
+      setEditingStartup(null);
+
+      setFormData({
+        company_name: "",
+        tagline: "",
+        description: "",
+        industry: "Technology",
+        stage: "idea",
+        location: "",
+        website: "",
+        funding_goal: "",
+        valuation: "",
+        equity_offered: "",
+        revenue: "",
+        monthly_growth: "",
+        team_size: "1",
+        business_model: "",
+        market_size: "",
+      });
+
+      loadStartups();
     } catch (error) {
-      console.error('Error saving startup:', error);
-      alert('Failed to save startup profile');
+      console.error(error);
+      alert("Failed to save startup");
     } finally {
       setSaving(false);
     }
@@ -113,8 +145,8 @@ export function MyStartup() {
   if (loading) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center h-screen">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        <div className="flex justify-center items-center h-screen">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-blue-500"></div>
         </div>
       </DashboardLayout>
     );
@@ -122,158 +154,142 @@ export function MyStartup() {
 
   return (
     <DashboardLayout>
-      <div className="p-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-white mb-2">
-              {startup ? 'Edit Your Startup' : 'Create Your Startup Profile'}
-            </h1>
-            <p className="text-slate-400">Provide detailed information to attract investors</p>
+      <div className="p-8 max-w-5xl mx-auto space-y-10">
+        {/* Startups List */}
+        <div>
+          <h1 className="text-3xl font-bold text-white mb-6">My Startups</h1>
+
+          {startups.length === 0 && (
+            <p className="text-slate-400">No startups created yet.</p>
+          )}
+
+          <div className="grid md:grid-cols-2 gap-4">
+            {startups.map((s) => (
+              <Card key={s.id} className="p-5">
+                <h3 className="text-lg text-white font-semibold">
+                  {s.company_name}
+                </h3>
+
+                <p className="text-slate-400">{s.tagline}</p>
+
+                <div className="text-sm text-slate-500 mt-2">
+                  Stage: {s.stage} • Industry: {s.industry}
+                </div>
+
+                <Button
+                  onClick={() => handleEdit(s)}
+                  className="mt-4"
+                  size="sm"
+                >
+                  Edit
+                </Button>
+              </Card>
+            ))}
+          </div>
+        </div>
+
+        {/* Create / Edit Startup */}
+        <Card className="p-8 space-y-6">
+          <h2 className="text-2xl text-white font-bold">
+            {editingStartup ? "Edit Startup" : "Add New Startup"}
+          </h2>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            <Input
+              label="Company Name"
+              value={formData.company_name}
+              onChange={(e) =>
+                setFormData({ ...formData, company_name: e.target.value })
+              }
+            />
+
+            <Input
+              label="Tagline"
+              value={formData.tagline}
+              onChange={(e) =>
+                setFormData({ ...formData, tagline: e.target.value })
+              }
+            />
           </div>
 
-          <Card className="p-8">
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Input
-                  label="Company Name"
-                  value={formData.company_name}
-                  onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
-                  required
-                />
-                <Input
-                  label="Tagline"
-                  value={formData.tagline}
-                  onChange={(e) => setFormData({ ...formData, tagline: e.target.value })}
-                  placeholder="One-line pitch"
-                />
-              </div>
+          <div>
+            <label className="text-sm text-slate-300">Description</label>
+            <textarea
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white"
+              rows={4}
+              value={formData.description}
+              onChange={(e) =>
+                setFormData({ ...formData, description: e.target.value })
+              }
+            />
+          </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Description</label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-slate-800/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                  rows={4}
-                  required
-                />
-              </div>
+          <div className="grid md:grid-cols-2 gap-6">
+            <Select
+              label="Industry"
+              value={formData.industry}
+              options={[
+                { value: "Technology", label: "Technology" },
+                { value: "Healthcare", label: "Healthcare" },
+                { value: "Finance", label: "Finance" },
+                { value: "E-commerce", label: "E-commerce" },
+              ]}
+              onChange={(e) =>
+                setFormData({ ...formData, industry: e.target.value })
+              }
+            />
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Select
-                  label="Industry"
-                  options={[
-                    { value: 'Technology', label: 'Technology' },
-                    { value: 'Healthcare', label: 'Healthcare' },
-                    { value: 'Finance', label: 'Finance' },
-                    { value: 'E-commerce', label: 'E-commerce' },
-                    { value: 'Education', label: 'Education' },
-                    { value: 'Other', label: 'Other' },
-                  ]}
-                  value={formData.industry}
-                  onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
-                />
-                <Select
-                  label="Stage"
-                  options={[
-                    { value: 'idea', label: 'Idea' },
-                    { value: 'mvp', label: 'MVP' },
-                    { value: 'early_revenue', label: 'Early Revenue' },
-                    { value: 'growth', label: 'Growth' },
-                    { value: 'scale', label: 'Scale' },
-                  ]}
-                  value={formData.stage}
-                  onChange={(e) => setFormData({ ...formData, stage: e.target.value })}
-                />
-              </div>
+            <Select
+              label="Stage"
+              value={formData.stage}
+              options={[
+                { value: "idea", label: "Idea" },
+                { value: "mvp", label: "MVP" },
+                { value: "growth", label: "Growth" },
+              ]}
+              onChange={(e) =>
+                setFormData({ ...formData, stage: e.target.value })
+              }
+            />
+          </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Input
-                  label="Location"
-                  value={formData.location}
-                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                />
-                <Input
-                  label="Website"
-                  value={formData.website}
-                  onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                  placeholder="https://..."
-                />
-              </div>
+          <div className="grid md:grid-cols-3 gap-6">
+            <Input
+              label="Funding Goal ($)"
+              type="number"
+              value={formData.funding_goal}
+              onChange={(e) =>
+                setFormData({ ...formData, funding_goal: e.target.value })
+              }
+            />
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Input
-                  label="Funding Goal ($)"
-                  type="number"
-                  value={formData.funding_goal}
-                  onChange={(e) => setFormData({ ...formData, funding_goal: e.target.value })}
-                  required
-                />
-                <Input
-                  label="Valuation ($)"
-                  type="number"
-                  value={formData.valuation}
-                  onChange={(e) => setFormData({ ...formData, valuation: e.target.value })}
-                  required
-                />
-                <Input
-                  label="Equity Offered (%)"
-                  type="number"
-                  value={formData.equity_offered}
-                  onChange={(e) => setFormData({ ...formData, equity_offered: e.target.value })}
-                />
-              </div>
+            <Input
+              label="Valuation ($)"
+              type="number"
+              value={formData.valuation}
+              onChange={(e) =>
+                setFormData({ ...formData, valuation: e.target.value })
+              }
+            />
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Input
-                  label="Annual Revenue ($)"
-                  type="number"
-                  value={formData.revenue}
-                  onChange={(e) => setFormData({ ...formData, revenue: e.target.value })}
-                />
-                <Input
-                  label="Monthly Growth (%)"
-                  type="number"
-                  value={formData.monthly_growth}
-                  onChange={(e) => setFormData({ ...formData, monthly_growth: e.target.value })}
-                />
-                <Input
-                  label="Team Size"
-                  type="number"
-                  value={formData.team_size}
-                  onChange={(e) => setFormData({ ...formData, team_size: e.target.value })}
-                  required
-                />
-              </div>
+            <Input
+              label="Equity Offered (%)"
+              type="number"
+              value={formData.equity_offered}
+              onChange={(e) =>
+                setFormData({ ...formData, equity_offered: e.target.value })
+              }
+            />
+          </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Business Model</label>
-                <textarea
-                  value={formData.business_model}
-                  onChange={(e) => setFormData({ ...formData, business_model: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-slate-800/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                  rows={3}
-                  placeholder="Describe how your business makes money..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Market Size</label>
-                <textarea
-                  value={formData.market_size}
-                  onChange={(e) => setFormData({ ...formData, market_size: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-slate-800/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                  rows={3}
-                  placeholder="Describe your target market and potential..."
-                />
-              </div>
-
-              <Button onClick={handleSave} disabled={saving} className="w-full">
-                {saving ? 'Saving...' : startup ? 'Update Profile' : 'Create Profile'}
-              </Button>
-            </div>
-          </Card>
-        </div>
+          <Button onClick={handleSave} disabled={saving} className="w-full">
+            {saving
+              ? "Saving..."
+              : editingStartup
+                ? "Update Startup"
+                : "Create Startup"}
+          </Button>
+        </Card>
       </div>
     </DashboardLayout>
   );

@@ -7,16 +7,12 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 // Create Supabase client
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// =============================
 // TYPES
-// =============================
 
 export type UserRole = "investor" | "startup" | "admin";
 export type VerificationStatus = "pending" | "verified" | "rejected";
 
-// =============================
 // PROFILE
-// =============================
 
 export interface Profile {
   id: string;
@@ -32,9 +28,7 @@ export interface Profile {
   updated_at: string;
 }
 
-// =============================
 // STARTUP
-// =============================
 
 export interface Startup {
   id: string;
@@ -62,9 +56,7 @@ export interface Startup {
   updated_at: string;
 }
 
-// =============================
 // BID
-// =============================
 
 export interface Bid {
   id: string;
@@ -78,9 +70,7 @@ export interface Bid {
   updated_at: string;
 }
 
-// =============================
 // INVESTMENT
-// =============================
 
 export interface Investment {
   id: string;

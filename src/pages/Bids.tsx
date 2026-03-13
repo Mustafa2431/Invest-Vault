@@ -46,7 +46,7 @@ export function Bids() {
 
     let fetchedBids: any[] = [];
 
-    /* ---------- INVESTOR VIEW ---------- */
+    /*  INVESTOR VIEW  */
 
     if (profile.role === "investor") {
       const { data, error } = await supabase
@@ -64,7 +64,7 @@ export function Bids() {
       if (!error && data) fetchedBids = data;
     }
 
-    /* ---------- STARTUP VIEW ---------- */
+    /*  STARTUP VIEW  */
 
     if (profile.role === "startup") {
       const { data: startups } = await supabase

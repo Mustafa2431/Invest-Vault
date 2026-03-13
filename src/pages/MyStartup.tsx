@@ -114,7 +114,6 @@ export function MyStartup() {
       }
 
       setEditingStartup(null);
-
       setFormData({
         company_name: "",
         tagline: "",
@@ -193,7 +192,6 @@ export function MyStartup() {
           <h2 className="text-2xl text-white font-bold">
             {editingStartup ? "Edit Startup" : "Add New Startup"}
           </h2>
-
           <div className="grid md:grid-cols-2 gap-6">
             <Input
               label="Company Name"
@@ -202,7 +200,6 @@ export function MyStartup() {
                 setFormData({ ...formData, company_name: e.target.value })
               }
             />
-
             <Input
               label="Tagline"
               value={formData.tagline}
@@ -238,7 +235,6 @@ export function MyStartup() {
                 setFormData({ ...formData, industry: e.target.value })
               }
             />
-
             <Select
               label="Stage"
               value={formData.stage}

@@ -1,14 +1,21 @@
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import {
-  Upload, FileCheck, AlertCircle, CheckCircle2,
-  Mail, ShieldCheck, ArrowRight, Loader2, RotateCcw
-} from 'lucide-react';
-import { DashboardLayout } from '../components/layout/DashboardLayout';
-import { Card } from '../components/ui/Card';
-import { Button } from '../components/ui/Button';
-import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+  Upload,
+  FileCheck,
+  AlertCircle,
+  CheckCircle2,
+  Mail,
+  ShieldCheck,
+  ArrowRight,
+  Loader2,
+  RotateCcw,
+} from "lucide-react";
+import { DashboardLayout } from "../components/layout/DashboardLayout";
+import { Card } from "../components/ui/Card";
+import { Button } from "../components/ui/Button";
+import { useAuth } from "../contexts/AuthContext";
+import { supabase } from "../lib/supabase";
 
 interface KYCDocument {
   id: string;
@@ -21,8 +28,12 @@ interface KYCDocument {
 // ─── Step Indicator ───────────────────────────────────────────────────────────
 function StepIndicator({ currentStep }: { currentStep: 1 | 2 }) {
   const steps = [
-    { number: 1, label: 'OTP Verification', sublabel: 'Verify your email' },
-    { number: 2, label: 'Identity Documents', sublabel: 'Upload government ID' },
+    { number: 1, label: "OTP Verification", sublabel: "Verify your email" },
+    {
+      number: 2,
+      label: "Identity Documents",
+      sublabel: "Upload government ID",
+    },
   ];
 
   return (
@@ -36,12 +47,14 @@ function StepIndicator({ currentStep }: { currentStep: 1 | 2 }) {
             <div className="flex flex-col items-center">
               <div
                 className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-300
-                  ${isDone ? 'bg-green-500 text-white' : isActive ? 'bg-blue-600 text-white ring-4 ring-blue-600/30' : 'bg-slate-700 text-slate-400'}`}
+                  ${isDone ? "bg-green-500 text-white" : isActive ? "bg-blue-600 text-white ring-4 ring-blue-600/30" : "bg-slate-700 text-slate-400"}`}
               >
                 {isDone ? <CheckCircle2 size={20} /> : step.number}
               </div>
               <div className="mt-2 text-center">
-                <p className={`text-xs font-semibold ${isActive ? 'text-white' : isDone ? 'text-green-400' : 'text-slate-500'}`}>
+                <p
+                  className={`text-xs font-semibold ${isActive ? "text-white" : isDone ? "text-green-400" : "text-slate-500"}`}
+                >
                   {step.label}
                 </p>
                 <p className="text-xs text-slate-600">{step.sublabel}</p>
@@ -49,7 +62,9 @@ function StepIndicator({ currentStep }: { currentStep: 1 | 2 }) {
             </div>
 
             {idx < steps.length - 1 && (
-              <div className={`w-24 h-0.5 mx-4 mb-6 transition-all duration-500 ${currentStep > 1 ? 'bg-green-500' : 'bg-slate-700'}`} />
+              <div
+                className={`w-24 h-0.5 mx-4 mb-6 transition-all duration-500 ${currentStep > 1 ? "bg-green-500" : "bg-slate-700"}`}
+              />
             )}
           </div>
         );
@@ -59,39 +74,51 @@ function StepIndicator({ currentStep }: { currentStep: 1 | 2 }) {
 }
 
 // ─── OTP Input ────────────────────────────────────────────────────────────────
-function OTPInput({ value, onChange, disabled }: {
+function OTPInput({
+  value,
+  onChange,
+  disabled,
+}: {
   value: string;
   onChange: (val: string) => void;
   disabled: boolean;
 }) {
   const OTP_LENGTH = 8;
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
-  const chars = value.toUpperCase().padEnd(OTP_LENGTH, '').split('').slice(0, OTP_LENGTH);
+  const chars = value
+    .toUpperCase()
+    .padEnd(OTP_LENGTH, "")
+    .split("")
+    .slice(0, OTP_LENGTH);
 
   const handleChange = (index: number, char: string) => {
     // Allow alphanumeric — Supabase sends letters + numbers
-    const cleaned = char.replace(/[^a-zA-Z0-9]/g, '').slice(-1).toUpperCase();
+    const cleaned = char
+      .replace(/[^a-zA-Z0-9]/g, "")
+      .slice(-1)
+      .toUpperCase();
     const newChars = [...chars];
     newChars[index] = cleaned;
-    onChange(newChars.join('').slice(0, OTP_LENGTH));
+    onChange(newChars.join("").slice(0, OTP_LENGTH));
     if (cleaned && index < OTP_LENGTH - 1) {
       inputRefs.current[index + 1]?.focus();
     }
   };
 
   const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === 'Backspace' && !chars[index] && index > 0) {
+    if (e.key === "Backspace" && !chars[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
       const newChars = [...chars];
-      newChars[index - 1] = '';
-      onChange(newChars.join(''));
+      newChars[index - 1] = "";
+      onChange(newChars.join(""));
     }
   };
 
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
-    const pasted = e.clipboardData.getData('text')
-      .replace(/[^a-zA-Z0-9]/g, '')
+    const pasted = e.clipboardData
+      .getData("text")
+      .replace(/[^a-zA-Z0-9]/g, "")
       .toUpperCase()
       .slice(0, OTP_LENGTH);
     onChange(pasted);
@@ -105,25 +132,28 @@ function OTPInput({ value, onChange, disabled }: {
         {Array.from({ length: OTP_LENGTH }).map((_, i) => (
           <input
             key={i}
-            ref={(el) => { inputRefs.current[i] = el; }}
+            ref={(el) => {
+              inputRefs.current[i] = el;
+            }}
             type="text"
             inputMode="text"
             maxLength={1}
-            value={chars[i] || ''}
+            value={chars[i] || ""}
             onChange={(e) => handleChange(i, e.target.value)}
             onKeyDown={(e) => handleKeyDown(i, e)}
             onPaste={handlePaste}
             disabled={disabled}
             className={`w-10 h-13 text-center text-lg font-bold rounded-xl border-2 bg-slate-800/50 text-white
               focus:outline-none transition-all duration-200 py-3
-              ${chars[i] ? 'border-blue-500 bg-blue-600/10' : 'border-slate-600'}
-              ${disabled ? 'opacity-50 cursor-not-allowed' : 'focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30'}
+              ${chars[i] ? "border-blue-500 bg-blue-600/10" : "border-slate-600"}
+              ${disabled ? "opacity-50 cursor-not-allowed" : "focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"}
             `}
           />
         ))}
       </div>
       <p className="text-center text-xs text-slate-500 mt-3">
-        Supabase sends an 8-character alphanumeric code — enter it exactly as received
+        Supabase sends an 8-character alphanumeric code — enter it exactly as
+        received
       </p>
     </div>
   );
@@ -133,10 +163,10 @@ function OTPInput({ value, onChange, disabled }: {
 function OTPVerificationStep({ onVerified }: { onVerified: () => void }) {
   const { user, profile } = useAuth();
   const [otpSent, setOtpSent] = useState(false);
-  const [otp, setOtp] = useState('');
+  const [otp, setOtp] = useState("");
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [countdown, setCountdown] = useState(0);
 
   // Countdown timer for resend
@@ -149,7 +179,7 @@ function OTPVerificationStep({ onVerified }: { onVerified: () => void }) {
   const sendOTP = async () => {
     if (!user?.email) return;
     setSending(true);
-    setError('');
+    setError("");
 
     try {
       // Pass emailRedirectTo as empty + shouldCreateUser false
@@ -167,7 +197,9 @@ function OTPVerificationStep({ onVerified }: { onVerified: () => void }) {
       setOtpSent(true);
       setCountdown(60);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send OTP. Try again.');
+      setError(
+        err instanceof Error ? err.message : "Failed to send OTP. Try again.",
+      );
     } finally {
       setSending(false);
     }
@@ -176,14 +208,14 @@ function OTPVerificationStep({ onVerified }: { onVerified: () => void }) {
   const verifyOTP = async () => {
     if (!user?.email || otp.length !== 8) return;
     setVerifying(true);
-    setError('');
+    setError("");
 
     try {
       // type: 'email' is correct for signInWithOtp digit verification
       const { error } = await supabase.auth.verifyOtp({
         email: user.email,
         token: otp,
-        type: 'email',
+        type: "email",
       });
 
       if (error) throw error;
@@ -191,14 +223,14 @@ function OTPVerificationStep({ onVerified }: { onVerified: () => void }) {
       // Mark OTP verified — store flag in phone field
       // In production: add email_otp_verified boolean column instead
       await supabase
-        .from('profiles')
+        .from("profiles")
         .update({ phone: `otp_verified:${new Date().toISOString()}` })
-        .eq('id', user.id);
+        .eq("id", user.id);
 
       onVerified();
     } catch (err) {
-      setError('Invalid or expired OTP. Please try again.');
-      setOtp('');
+      setError("Invalid or expired OTP. Please try again.");
+      setOtp("");
     } finally {
       setVerifying(false);
     }
@@ -210,20 +242,29 @@ function OTPVerificationStep({ onVerified }: { onVerified: () => void }) {
         <div className="w-16 h-16 bg-blue-600/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
           <Mail className="text-blue-400" size={32} />
         </div>
-        <h2 className="text-2xl font-bold text-white mb-2">Email Verification</h2>
+        <h2 className="text-2xl font-bold text-white mb-2">
+          Email Verification
+        </h2>
         <p className="text-slate-400 text-sm">
           {otpSent ? (
             <span>
-              We sent an <span className="text-blue-400 font-semibold">8-character code</span> to{' '}
-              <span className="text-white font-medium">{user?.email}</span>.{' '}
+              We sent an{" "}
+              <span className="text-blue-400 font-semibold">
+                8-character code
+              </span>{" "}
+              to <span className="text-white font-medium">{user?.email}</span>.{" "}
               <span className="text-xs text-slate-500 block mt-1">
-                Check your inbox &amp; spam. Enter the code exactly as shown in the email.
+                Check your inbox &amp; spam. Enter the code exactly as shown in
+                the email.
               </span>
             </span>
           ) : (
             <span>
-              We'll send an <span className="text-blue-400 font-semibold">8-character OTP</span> to{' '}
-              <span className="text-white font-medium">{user?.email}</span>
+              We'll send an{" "}
+              <span className="text-blue-400 font-semibold">
+                8-character OTP
+              </span>{" "}
+              to <span className="text-blue-400 font-semibold">E-mail</span>
             </span>
           )}
         </p>
@@ -237,7 +278,12 @@ function OTPVerificationStep({ onVerified }: { onVerified: () => void }) {
       )}
 
       {!otpSent ? (
-        <Button onClick={sendOTP} disabled={sending} className="w-full" size="lg">
+        <Button
+          onClick={sendOTP}
+          disabled={sending}
+          className="w-full"
+          size="lg"
+        >
           {sending ? (
             <span className="flex items-center justify-center gap-2">
               <Loader2 size={18} className="animate-spin" />
@@ -276,11 +322,15 @@ function OTPVerificationStep({ onVerified }: { onVerified: () => void }) {
           <div className="text-center">
             {countdown > 0 ? (
               <p className="text-slate-500 text-sm">
-                Resend OTP in <span className="text-blue-400 font-medium">{countdown}s</span>
+                Resend OTP in{" "}
+                <span className="text-blue-400 font-medium">{countdown}s</span>
               </p>
             ) : (
               <button
-                onClick={() => { setOtp(''); sendOTP(); }}
+                onClick={() => {
+                  setOtp("");
+                  sendOTP();
+                }}
                 className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 mx-auto transition-colors"
               >
                 <RotateCcw size={14} />
@@ -302,8 +352,13 @@ function Step1CompletedBanner() {
         <CheckCircle2 className="text-green-400" size={20} />
       </div>
       <div className="flex-1">
-        <p className="text-green-400 font-semibold">Step 1 Verification Completed ✓</p>
-        <p className="text-slate-400 text-sm">Your email has been verified. Now upload your identity documents below to complete full KYC.</p>
+        <p className="text-green-400 font-semibold">
+          Step 1 Verification Completed ✓
+        </p>
+        <p className="text-slate-400 text-sm">
+          Your email has been verified. Now upload your identity documents below
+          to complete full KYC.
+        </p>
       </div>
     </div>
   );
@@ -322,48 +377,86 @@ function DocumentUploadStep({
   profile: { role: string; verification_status: string } | null;
 }) {
   const documentTypes = [
-    { type: 'government_id', label: 'Government ID', description: 'Passport, Driver License, or National ID', required: true },
-    { type: 'company_registration', label: 'Company Registration', description: 'Only for startup founders', required: false },
-    { type: 'pan', label: 'PAN Card', description: 'Optional for tax purposes', required: false },
-    { type: 'gst', label: 'GST Certificate', description: 'Optional for registered businesses', required: false },
+    {
+      type: "government_id",
+      label: "Government ID",
+      description: "Passport, Driver License, or National ID",
+      required: true,
+    },
+    {
+      type: "company_registration",
+      label: "Company Registration",
+      description: "Only for startup founders",
+      required: false,
+    },
+    {
+      type: "pan",
+      label: "PAN Card",
+      description: "Optional for tax purposes",
+      required: false,
+    },
+    {
+      type: "gst",
+      label: "GST Certificate",
+      description: "Optional for registered businesses",
+      required: false,
+    },
   ];
 
   const getStatus = (type: string) => {
-    return documents.find((d) => d.document_type === type)?.status || 'not_uploaded';
+    return (
+      documents.find((d) => d.document_type === type)?.status || "not_uploaded"
+    );
   };
 
   return (
     <div className="space-y-4">
       {documentTypes.map((docType) => {
-        if (profile?.role === 'investor' && docType.type === 'company_registration') return null;
+        if (
+          profile?.role === "investor" &&
+          docType.type === "company_registration"
+        )
+          return null;
 
         const status = getStatus(docType.type);
         const isUploading = uploading === docType.type;
-        const isVerified = status === 'verified';
+        const isVerified = status === "verified";
 
         return (
           <Card key={docType.type} className="p-6">
             <div className="flex items-center justify-between">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
-                  <h3 className="text-base font-semibold text-white">{docType.label}</h3>
+                  <h3 className="text-base font-semibold text-white">
+                    {docType.label}
+                  </h3>
                   {docType.required && (
-                    <span className="text-xs text-red-400 font-medium">Required</span>
+                    <span className="text-xs text-red-400 font-medium">
+                      Required
+                    </span>
                   )}
-                  {status === 'verified' && (
-                    <span className="px-2 py-0.5 bg-green-600/20 text-green-400 text-xs rounded-full">Verified</span>
+                  {status === "verified" && (
+                    <span className="px-2 py-0.5 bg-green-600/20 text-green-400 text-xs rounded-full">
+                      Verified
+                    </span>
                   )}
-                  {status === 'pending' && (
-                    <span className="px-2 py-0.5 bg-yellow-600/20 text-yellow-400 text-xs rounded-full">Pending Review</span>
+                  {status === "pending" && (
+                    <span className="px-2 py-0.5 bg-yellow-600/20 text-yellow-400 text-xs rounded-full">
+                      Pending Review
+                    </span>
                   )}
-                  {status === 'rejected' && (
-                    <span className="px-2 py-0.5 bg-red-600/20 text-red-400 text-xs rounded-full">Rejected</span>
+                  {status === "rejected" && (
+                    <span className="px-2 py-0.5 bg-red-600/20 text-red-400 text-xs rounded-full">
+                      Rejected
+                    </span>
                   )}
                 </div>
                 <p className="text-sm text-slate-400">{docType.description}</p>
               </div>
 
-              <label className={isVerified ? 'cursor-not-allowed' : 'cursor-pointer'}>
+              <label
+                className={isVerified ? "cursor-not-allowed" : "cursor-pointer"}
+              >
                 <input
                   type="file"
                   className="hidden"
@@ -374,20 +467,30 @@ function DocumentUploadStep({
                     if (file) onUpload(docType.type, file);
                   }}
                 />
-                <div className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 transition-all text-sm font-medium
-                  ${isVerified
-                    ? 'border-green-600/40 text-green-400 cursor-not-allowed'
-                    : isUploading
-                    ? 'border-blue-500/50 text-blue-400'
-                    : 'border-slate-600 hover:border-blue-500 text-slate-300 hover:text-white'
+                <div
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 transition-all text-sm font-medium
+                  ${
+                    isVerified
+                      ? "border-green-600/40 text-green-400 cursor-not-allowed"
+                      : isUploading
+                        ? "border-blue-500/50 text-blue-400"
+                        : "border-slate-600 hover:border-blue-500 text-slate-300 hover:text-white"
                   }`}
                 >
                   {isUploading ? (
-                    <><Loader2 size={16} className="animate-spin" /> Uploading...</>
+                    <>
+                      <Loader2 size={16} className="animate-spin" />{" "}
+                      Uploading...
+                    </>
                   ) : isVerified ? (
-                    <><CheckCircle2 size={16} /> Uploaded</>
+                    <>
+                      <CheckCircle2 size={16} /> Uploaded
+                    </>
                   ) : (
-                    <><Upload size={16} /> {status === 'pending' ? 'Re-upload' : 'Upload'}</>
+                    <>
+                      <Upload size={16} />{" "}
+                      {status === "pending" ? "Re-upload" : "Upload"}
+                    </>
                   )}
                 </div>
               </label>
@@ -420,12 +523,12 @@ export function Verification() {
   const checkOtpStatus = async () => {
     if (!user) return;
     const { data } = await supabase
-      .from('profiles')
-      .select('phone')
-      .eq('id', user.id)
+      .from("profiles")
+      .select("phone")
+      .eq("id", user.id)
       .maybeSingle();
 
-    if (data?.phone?.startsWith('otp_verified:')) {
+    if (data?.phone?.startsWith("otp_verified:")) {
       setOtpVerified(true);
     }
     setCheckingOtp(false);
@@ -434,10 +537,10 @@ export function Verification() {
   const loadDocuments = async () => {
     if (!user) return;
     const { data } = await supabase
-      .from('kyc_documents')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('uploaded_at', { ascending: false });
+      .from("kyc_documents")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("uploaded_at", { ascending: false });
 
     if (data) setDocuments(data);
   };
@@ -447,29 +550,29 @@ export function Verification() {
     setUploading(documentType);
 
     try {
-      const fileExt = file.name.split('.').pop();
+      const fileExt = file.name.split(".").pop();
       const fileName = `${user.id}/${documentType}-${Date.now()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
-        .from('kyc-documents')
+        .from("kyc-documents")
         .upload(fileName, file);
 
       if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('kyc-documents')
-        .getPublicUrl(fileName);
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("kyc-documents").getPublicUrl(fileName);
 
-      await supabase.from('kyc_documents').insert({
+      await supabase.from("kyc_documents").insert({
         user_id: user.id,
         document_type: documentType,
         document_url: publicUrl,
-        status: 'pending',
+        status: "pending",
       });
 
       await loadDocuments();
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error("Upload error:", error);
     } finally {
       setUploading(null);
     }
@@ -498,10 +601,12 @@ export function Verification() {
         <div className="max-w-2xl mx-auto">
           {/* Page Header */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-white mb-2">KYC Verification</h1>
+            <h1 className="text-3xl font-bold text-white mb-2">
+              KYC Verification
+            </h1>
             <p className="text-slate-400">
-              Complete both steps to start{' '}
-              {profile?.role === 'investor' ? 'investing' : 'raising funds'}
+              Complete both steps to start{" "}
+              {profile?.role === "investor" ? "investing" : "raising funds"}
             </p>
           </div>
 
@@ -509,32 +614,40 @@ export function Verification() {
           <StepIndicator currentStep={currentStep} />
 
           {/* Overall Verification Status Banner */}
-          {profile?.verification_status === 'verified' && (
+          {profile?.verification_status === "verified" && (
             <Card className="p-5 mb-6">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-green-600/20 rounded-full flex items-center justify-center">
                   <CheckCircle2 className="text-green-400" size={24} />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-white">Fully Verified</h3>
-                  <p className="text-sm text-slate-400">Your account is fully verified</p>
+                  <h3 className="text-lg font-semibold text-white">
+                    Fully Verified
+                  </h3>
+                  <p className="text-sm text-slate-400">
+                    Your account is fully verified
+                  </p>
                 </div>
-                <Button onClick={() => navigate('/dashboard')}>
+                <Button onClick={() => navigate("/dashboard")}>
                   Go to Dashboard <ArrowRight size={16} className="ml-1" />
                 </Button>
               </div>
             </Card>
           )}
 
-          {profile?.verification_status === 'rejected' && (
+          {profile?.verification_status === "rejected" && (
             <Card className="p-5 mb-6">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-red-600/20 rounded-full flex items-center justify-center">
                   <AlertCircle className="text-red-400" size={24} />
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-white">Verification Rejected</h3>
-                  <p className="text-sm text-slate-400">Please re-upload valid documents below</p>
+                  <h3 className="text-lg font-semibold text-white">
+                    Verification Rejected
+                  </h3>
+                  <p className="text-sm text-slate-400">
+                    Please re-upload valid documents below
+                  </p>
                 </div>
               </div>
             </Card>
@@ -551,10 +664,16 @@ export function Verification() {
 
               <div className="mb-6">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-bold">2</div>
+                  <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                    2
+                  </div>
                   <div>
-                    <h2 className="text-lg font-semibold text-white">Upload Identity Documents</h2>
-                    <p className="text-sm text-slate-400">Upload your government ID for final verification</p>
+                    <h2 className="text-lg font-semibold text-white">
+                      Upload Identity Documents
+                    </h2>
+                    <p className="text-sm text-slate-400">
+                      Upload your government ID for final verification
+                    </p>
                   </div>
                 </div>
 
@@ -566,19 +685,25 @@ export function Verification() {
                 />
               </div>
 
-              {profile?.verification_status === 'pending' && documents.length > 0 && (
-                <Card className="p-5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-yellow-600/20 rounded-full flex items-center justify-center">
-                      <FileCheck className="text-yellow-400" size={20} />
+              {profile?.verification_status === "pending" &&
+                documents.length > 0 && (
+                  <Card className="p-5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-yellow-600/20 rounded-full flex items-center justify-center">
+                        <FileCheck className="text-yellow-400" size={20} />
+                      </div>
+                      <div>
+                        <p className="text-white font-medium">
+                          Documents Under Review
+                        </p>
+                        <p className="text-slate-400 text-sm">
+                          Our team will verify your documents within 24–48
+                          hours.
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-white font-medium">Documents Under Review</p>
-                      <p className="text-slate-400 text-sm">Our team will verify your documents within 24–48 hours.</p>
-                    </div>
-                  </div>
-                </Card>
-              )}
+                  </Card>
+                )}
             </div>
           )}
         </div>

@@ -2,7 +2,16 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
-import { TrendingUp, MessageSquare } from "lucide-react";
+import {
+  TrendingUp,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Send,
+  MessageSquare,
+  Mail,
+  Loader,
+} from "lucide-react";
 import { DashboardLayout } from "../components/layout/DashboardLayout";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
@@ -15,33 +24,30 @@ interface BidWithStartup {
   message: string;
   status: string;
   created_at: string;
-
   startup: {
     id: string;
     company_name: string;
     logo_url: string;
   };
-
-  investor: {
+  investor?: {
     id: string;
     full_name: string;
     email: string;
-  } | null;
+  };
 }
 
-export function Bids() {
-  const { profile } = useAuth();
+type EmailStatus = "idle" | "sending" | "sent" | "error";
 
+export function Bids() {
+  const { profile, user } = useAuth();
   const [bids, setBids] = useState<BidWithStartup[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const [modalOpen, setModalOpen] = useState(false);
-  const [selectedBid, setSelectedBid] = useState<any>(null);
-  const [actionType, setActionType] = useState<"accepted" | "rejected" | null>(
-    null,
+  const [rejectingBidId, setRejectingBidId] = useState<string | null>(null);
+  const [rejectMessage, setRejectMessage] = useState("");
+  const [emailStatus, setEmailStatus] = useState<Record<string, EmailStatus>>(
+    {},
   );
-  const [messageText, setMessageText] = useState("");
-
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -51,94 +57,192 @@ export function Bids() {
   const loadBids = async () => {
     if (!profile) return;
 
-    let fetchedBids: any[] = [];
-
-    /* INVESTOR VIEW */
-
     if (profile.role === "investor") {
       const { data } = await supabase
         .from("bids")
-        .select(
-          `
-          *,
-          startup:startups(id,company_name,logo_url),
-          investor:profiles!bids_investor_id_fkey(id,full_name,email)
-        `,
-        )
+        .select(`*, startup:startups(id, company_name, logo_url)`)
         .eq("investor_id", profile.id)
         .order("created_at", { ascending: false });
 
-      if (data) fetchedBids = data;
-    }
-
-    /* STARTUP VIEW */
-
-    if (profile.role === "startup") {
-      const { data: startups } = await supabase
+      if (data) setBids(data as unknown as BidWithStartup[]);
+    } else if (profile.role === "startup") {
+      const { data: startupData } = await supabase
         .from("startups")
         .select("id")
-        .eq("founder_id", profile.id);
+        .eq("founder_id", profile.id)
+        .maybeSingle();
 
-      if (startups && startups.length > 0) {
-        const startupIds = startups.map((s: any) => s.id);
-
+      if (startupData) {
         const { data } = await supabase
           .from("bids")
           .select(
-            `
-            *,
-            startup:startups(id,company_name,logo_url),
-            investor:profiles!bids_investor_id_fkey(id,full_name,email)
-          `,
+            `*, startup:startups(id, company_name, logo_url), investor:profiles(id, full_name, email)`,
           )
-          .in("startup_id", startupIds)
+          .eq("startup_id", startupData.id)
           .order("created_at", { ascending: false });
 
-        if (data) fetchedBids = data;
+        if (data) setBids(data as unknown as BidWithStartup[]);
       }
     }
 
-    setBids(fetchedBids);
     setLoading(false);
   };
 
-  const openModal = (bid: any, type: "accepted" | "rejected") => {
-    setSelectedBid(bid);
-    setActionType(type);
-    setMessageText("");
-    setModalOpen(true);
+  const APPS_SCRIPT_URL =
+    "https://script.google.com/macros/s/AKfycbz3iDKWYuBMUqtRYyqKdmeVauuQF8fxWJxZ3QCAxs-qoN-91fmSoL_GTLoSxPzJ71ea/exec";
+
+  const sendEmail = async (
+    type: "accepted" | "rejected",
+    bid: BidWithStartup,
+    rejectionReason?: string,
+  ) => {
+    if (!bid.investor) return;
+    setEmailStatus((prev) => ({ ...prev, [bid.id]: "sending" }));
+
+    const isAccepted = type === "accepted";
+
+    const subject = isAccepted
+      ? `🎉 Your bid on ${bid.startup.company_name} has been accepted!`
+      : `Update on your bid for ${bid.startup.company_name}`;
+
+    const body = isAccepted
+      ? `Hi ${bid.investor.full_name},
+
+Great news! Your bid on ${bid.startup.company_name} has been accepted.
+
+Bid Details:
+- Investment Amount: $${Number(bid.amount).toLocaleString()}
+- Equity Stake: ${bid.equity_requested}%
+
+The founder will contact you soon to finalize the agreement.
+
+Visit the platform: ${window.location.origin}/bids
+
+— Invest Vault Team`
+      : `Hi ${bid.investor.full_name},
+
+Thank you for your interest in ${bid.startup.company_name}.
+The founder has decided not to move forward with your bid at this time.
+
+Your Bid:
+- Amount: $${Number(bid.amount).toLocaleString()}
+- Equity: ${bid.equity_requested}%
+
+${rejectionReason ? `Message from the founder:\n"${rejectionReason}"` : ""}
+
+Explore more startups: ${window.location.origin}/discover
+
+— Invest Vault Team`;
+
+    try {
+      const res = await fetch(APPS_SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          to_email: bid.investor.email,
+          subject,
+          body,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setEmailStatus((prev) => ({ ...prev, [bid.id]: "sent" }));
+      } else {
+        throw new Error("Failed");
+      }
+    } catch (err) {
+      console.error(err);
+      setEmailStatus((prev) => ({ ...prev, [bid.id]: "error" }));
+    } finally {
+      setTimeout(() => {
+        setEmailStatus((prev) => ({ ...prev, [bid.id]: "idle" }));
+      }, 4000);
+    }
   };
 
-  const handleSubmit = async () => {
-    if (!selectedBid || !actionType || !messageText.trim()) return;
+  const handleAcceptBid = async (bid: BidWithStartup) => {
+    setActionLoading(bid.id);
 
-    /* update bid status */
-
-    await supabase
+    const { error } = await supabase
       .from("bids")
-      .update({ status: actionType })
-      .eq("id", selectedBid.id);
+      .update({ status: "accepted" })
+      .eq("id", bid.id);
 
-    /* send message */
+    if (!error) {
+      await sendEmail("accepted", bid); // auto-send on accept
+      loadBids();
+    }
 
-    await supabase.from("chat_messages").insert({
-      sender_id: profile?.id,
-      receiver_id: selectedBid.investor_id,
-      message: messageText,
-      read: false,
-    });
+    setActionLoading(null);
+  };
 
-    setModalOpen(false);
-    setMessageText("");
+  const handleRejectBid = async (bid: BidWithStartup) => {
+    if (!user) return;
+    setActionLoading(bid.id);
 
-    loadBids();
+    const { error: updateError } = await supabase
+      .from("bids")
+      .update({ status: "rejected" })
+      .eq("id", bid.id);
+
+    if (!updateError) {
+      if (rejectMessage.trim()) {
+        await supabase.from("chat_messages").insert({
+          sender_id: user.id,
+          receiver_id: bid.investor_id,
+          message: `Regarding your bid on ${bid.startup.company_name}: ${rejectMessage}`,
+          read: false,
+        });
+      }
+
+      await sendEmail("rejected", bid, rejectMessage.trim() || undefined);
+
+      setRejectingBidId(null);
+      setRejectMessage("");
+      loadBids();
+    }
+
+    setActionLoading(null);
+  };
+
+  // ─── Email status badge component ──────────────────────────────────────────
+  const EmailBadge = ({ bidId }: { bidId: string }) => {
+    const status = emailStatus[bidId];
+    if (!status || status === "idle") return null;
+
+    const cfg = {
+      sending: {
+        cls: "bg-blue-600/20 border-blue-500/30 text-blue-400",
+        icon: <Loader size={12} className="animate-spin" />,
+        label: "Sending email…",
+      },
+      sent: {
+        cls: "bg-green-600/20 border-green-500/30 text-green-400",
+        icon: <Mail size={12} />,
+        label: "Email sent!",
+      },
+      error: {
+        cls: "bg-red-600/20 border-red-500/30 text-red-400",
+        icon: <XCircle size={12} />,
+        label: "Email failed",
+      },
+    }[status];
+
+    return (
+      <span
+        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border mt-2 ${cfg.cls}`}
+      >
+        {cfg.icon}
+        {cfg.label}
+      </span>
+    );
   };
 
   if (loading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-screen">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-blue-500"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500" />
         </div>
       </DashboardLayout>
     );
@@ -151,7 +255,6 @@ export function Bids() {
           <h1 className="text-3xl font-bold text-white mb-2">
             {profile?.role === "investor" ? "My Bids" : "Received Bids"}
           </h1>
-
           <p className="text-slate-400">
             {profile?.role === "investor"
               ? "Track your investment bids"
@@ -162,138 +265,286 @@ export function Bids() {
         {bids.length === 0 ? (
           <Card className="p-12 text-center">
             <TrendingUp className="text-slate-600 mx-auto mb-4" size={48} />
-
-            <h3 className="text-xl font-semibold text-white mb-4">
+            <h3 className="text-xl font-semibold text-white mb-2">
               No Bids Yet
             </h3>
-
+            <p className="text-slate-400 mb-6">
+              {profile?.role === "investor"
+                ? "Start investing by placing bids on startups"
+                : "Share your startup to receive bids from investors"}
+            </p>
             <Button onClick={() => navigate("/discover")}>
-              Discover Startups
+              {profile?.role === "investor"
+                ? "Discover Startups"
+                : "View My Startup"}
             </Button>
           </Card>
         ) : (
           <div className="space-y-4">
-            {bids.map((bid) => (
-              <Card key={bid.id} className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-4 mb-4">
-                      <div className="w-12 h-12 flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg text-white font-bold">
-                        {bid.investor?.full_name?.charAt(0) || "I"}
+            {bids.map((bid) => {
+              const isBidLoading = actionLoading === bid.id;
+              return (
+                <Card key={bid.id} className="p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      {/* Header row */}
+                      <div className="flex items-center space-x-4 mb-4">
+                        {bid.startup.logo_url ? (
+                          <img
+                            src={bid.startup.logo_url}
+                            alt={bid.startup.company_name}
+                            className="w-12 h-12 rounded-lg flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex-shrink-0" />
+                        )}
+                        <div>
+                          <h3 className="text-lg font-semibold text-white">
+                            {bid.startup.company_name}
+                          </h3>
+                          {bid.investor && (
+                            <p className="text-sm text-slate-400">
+                              From: {bid.investor.full_name}
+                              <span className="mx-1.5 text-slate-600">·</span>
+                              {bid.investor.email}
+                            </p>
+                          )}
+                        </div>
                       </div>
 
-                      <div>
-                        <h3 className="text-lg font-semibold text-white">
-                          {bid.startup.company_name}
-                        </h3>
-
-                        <p className="text-sm text-slate-400">
-                          Investor: {bid.investor?.full_name || "Unknown"}
-                        </p>
+                      {/* Metrics */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                        <div>
+                          <p className="text-sm text-slate-400">
+                            Investment Amount
+                          </p>
+                          <p className="text-lg font-semibold text-white">
+                            ${Number(bid.amount).toLocaleString()}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-slate-400">
+                            Equity Requested
+                          </p>
+                          <p className="text-lg font-semibold text-white">
+                            {bid.equity_requested}%
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-slate-400">Status</p>
+                          <div className="flex items-center space-x-1 mt-0.5">
+                            {bid.status === "accepted" && (
+                              <CheckCircle
+                                className="text-green-400"
+                                size={16}
+                              />
+                            )}
+                            {bid.status === "rejected" && (
+                              <XCircle className="text-red-400" size={16} />
+                            )}
+                            {bid.status === "pending" && (
+                              <Clock className="text-yellow-400" size={16} />
+                            )}
+                            <span
+                              className={`text-sm font-medium capitalize
+                              ${bid.status === "accepted" ? "text-green-400" : ""}
+                              ${bid.status === "rejected" ? "text-red-400" : ""}
+                              ${bid.status === "pending" ? "text-yellow-400" : ""}
+                            `}
+                            >
+                              {bid.status}
+                            </span>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-sm text-slate-400">Date</p>
+                          <p className="text-sm text-white">
+                            {new Date(bid.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
                       </div>
+
+                      {bid.message && (
+                        <div className="p-4 bg-slate-800/50 rounded-lg mb-3">
+                          <p className="text-sm text-slate-300">
+                            {bid.message}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Live email badge */}
+                      <EmailBadge bidId={bid.id} />
+
+                      {/* Static badge for investor view */}
+                      {profile?.role === "investor" &&
+                        (bid.status === "accepted" ||
+                          bid.status === "rejected") && (
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border mt-2
+                          ${
+                            bid.status === "accepted"
+                              ? "bg-green-600/10 border-green-600/20 text-green-400"
+                              : "bg-red-600/10 border-red-600/20 text-red-400"
+                          }`}
+                          >
+                            <Mail size={12} />
+                            {bid.status === "accepted"
+                              ? "Acceptance email was sent to you"
+                              : "Rejection email was sent to you"}
+                          </span>
+                        )}
                     </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                      <div>
-                        <p className="text-sm text-slate-400">Amount</p>
-                        <p className="text-lg font-semibold text-white">
-                          ${Number(bid.amount).toLocaleString()}
-                        </p>
-                      </div>
+                    {/* Startup founder action buttons */}
+                    {profile?.role === "startup" &&
+                      bid.status === "pending" && (
+                        <div className="flex flex-col space-y-2 flex-shrink-0">
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => handleAcceptBid(bid)}
+                            disabled={isBidLoading}
+                            className="flex items-center justify-center gap-1.5 min-w-[110px]"
+                          >
+                            {isBidLoading ? (
+                              <Loader size={14} className="animate-spin" />
+                            ) : (
+                              <CheckCircle size={14} />
+                            )}
+                            <span>
+                              {isBidLoading ? "Accepting…" : "Accept"}
+                            </span>
+                          </Button>
 
-                      <div>
-                        <p className="text-sm text-slate-400">Equity</p>
-                        <p className="text-lg font-semibold text-white">
-                          {bid.equity_requested}%
-                        </p>
-                      </div>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => setRejectingBidId(bid.id)}
+                            disabled={isBidLoading}
+                            className="flex items-center justify-center gap-1.5 min-w-[110px]"
+                          >
+                            <XCircle size={14} />
+                            <span>Reject</span>
+                          </Button>
 
-                      <div>
-                        <p className="text-sm text-slate-400">Status</p>
-                        <span className="text-white capitalize">
-                          {bid.status}
-                        </span>
-                      </div>
-
-                      <div>
-                        <p className="text-sm text-slate-400">Date</p>
-                        <p className="text-sm text-white">
-                          {new Date(bid.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-
-                    {bid.message && (
-                      <div className="p-4 bg-slate-800 rounded-lg">
-                        <p className="text-sm text-slate-300">{bid.message}</p>
-                      </div>
-                    )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => navigate("/messages")}
+                            className="flex items-center justify-center gap-1.5 min-w-[110px]"
+                          >
+                            <MessageSquare size={14} />
+                            <span>Message</span>
+                          </Button>
+                        </div>
+                      )}
                   </div>
-
-                  {profile?.role === "startup" && bid.status === "pending" && (
-                    <div className="flex flex-col space-y-2 ml-4">
-                      <Button
-                        size="sm"
-                        onClick={() => openModal(bid, "accepted")}
-                      >
-                        Accept
-                      </Button>
-
-                      <Button
-                        size="sm"
-                        variant="danger"
-                        onClick={() => openModal(bid, "rejected")}
-                      >
-                        Reject
-                      </Button>
-
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => navigate("/messages")}
-                      >
-                        <MessageSquare size={16} />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </Card>
-            ))}
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* MESSAGE MODAL */}
+      {/* ── Reject Modal ───────────────────────────────────────────── */}
+      {rejectingBidId &&
+        (() => {
+          const bid = bids.find((b) => b.id === rejectingBidId);
+          if (!bid) return null;
+          const isSending = actionLoading === rejectingBidId;
 
-      {modalOpen && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-slate-900 p-6 rounded-xl w-full max-w-md">
-            <h2 className="text-lg font-semibold text-white mb-4">
-              {actionType === "accepted"
-                ? "Accept Bid Message"
-                : "Reject Bid Message"}
-            </h2>
+          return (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+              <Card className="w-full max-w-md shadow-2xl">
+                <div className="p-6">
+                  {/* Modal header */}
+                  <div className="flex items-center gap-3 mb-5">
+                    <div className="w-10 h-10 bg-red-600/20 rounded-full flex items-center justify-center flex-shrink-0">
+                      <XCircle className="text-red-400" size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-white">
+                        Reject Bid
+                      </h3>
+                      <p className="text-sm text-slate-400">
+                        {bid.startup.company_name}
+                      </p>
+                    </div>
+                  </div>
 
-            <textarea
-              value={messageText}
-              onChange={(e) => setMessageText(e.target.value)}
-              placeholder="Write message to investor..."
-              className="w-full p-3 bg-slate-800 border border-slate-700 rounded-lg text-white mb-4"
-              rows={4}
-            />
+                  {/* Email notice */}
+                  <div className="flex items-start gap-2 p-3 bg-blue-600/10 border border-blue-500/20 rounded-lg mb-5">
+                    <Mail
+                      size={15}
+                      className="text-blue-400 mt-0.5 flex-shrink-0"
+                    />
+                    <p className="text-sm text-blue-300 leading-snug">
+                      A rejection email will be sent to{" "}
+                      <span className="font-semibold text-white">
+                        {bid.investor?.email}
+                      </span>{" "}
+                      when you click the button below.
+                    </p>
+                  </div>
 
-            <div className="flex justify-end space-x-3">
-              <Button variant="ghost" onClick={() => setModalOpen(false)}>
-                Cancel
-              </Button>
+                  {/* Reason */}
+                  <div className="mb-5">
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                      Reason for rejection
+                      <span className="text-slate-500 font-normal ml-1">
+                        (optional but recommended)
+                      </span>
+                    </label>
+                    <textarea
+                      value={rejectMessage}
+                      onChange={(e) => setRejectMessage(e.target.value)}
+                      maxLength={500}
+                      placeholder="e.g. We're looking for a different investment structure, or we've already committed to another investor…"
+                      className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                      rows={4}
+                    />
+                    <p className="text-xs text-slate-500 mt-1 text-right">
+                      {rejectMessage.length}/500
+                    </p>
+                  </div>
 
-              <Button disabled={!messageText.trim()} onClick={handleSubmit}>
-                Send Message
-              </Button>
+                  {/* Actions */}
+                  <div className="flex gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setRejectingBidId(null);
+                        setRejectMessage("");
+                      }}
+                      className="flex-1"
+                      disabled={isSending}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="danger"
+                      onClick={() => handleRejectBid(bid)}
+                      disabled={isSending}
+                      className="flex-1 flex items-center justify-center gap-2"
+                    >
+                      {isSending ? (
+                        <>
+                          <Loader size={15} className="animate-spin" />
+                          <span>Sending…</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send size={15} />
+                          <span>Reject &amp; Send Email</span>
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </Card>
             </div>
-          </div>
-        </div>
-      )}
+          );
+        })()}
     </DashboardLayout>
   );
 }

@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   Building2,
@@ -9,9 +9,10 @@ import {
   Wallet,
   Users,
   FileCheck,
-  Brain
-} from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+  Brain,
+  Zap,
+} from "lucide-react";
+import { useAuth } from "../../contexts/AuthContext";
 
 interface NavItem {
   label: string;
@@ -26,76 +27,79 @@ export function Sidebar() {
 
   const navItems: NavItem[] = [
     {
-      label: 'Dashboard',
-      path: '/dashboard',
+      label: "Dashboard",
+      path: "/dashboard",
       icon: <LayoutDashboard size={20} />,
-      roles: ['investor', 'startup', 'admin'],
+      roles: ["investor", "startup", "admin"],
     },
     {
-      label: 'Discover Startups',
-      path: '/discover',
+      label: "Discover Startups",
+      path: "/discover",
       icon: <Building2 size={20} />,
-      roles: ['investor'],
+      roles: ["investor"],
     },
     {
-      label: 'Portfolio',
-      path: '/portfolio',
+      label: "Portfolio",
+      path: "/portfolio",
       icon: <Wallet size={20} />,
-      roles: ['investor'],
+      roles: ["investor"],
     },
     {
-      label: 'My Startup',
-      path: '/my-startup',
+      label: "My Startup",
+      path: "/my-startup",
       icon: <Building2 size={20} />,
-      roles: ['startup'],
+      roles: ["startup"],
     },
     {
-      label: 'Bids',
-      path: '/bids',
+      label: "Bids",
+      path: "/bids",
       icon: <TrendingUp size={20} />,
-      roles: ['investor', 'startup'],
+      roles: ["investor", "startup"],
     },
     {
-      label: 'AI Assistant',
-      path: '/ai-assistant',
+      label: "AI Assistant",
+      path: "/ai-assistant",
       icon: <Brain size={20} />,
-      roles: ['investor', 'startup'],
+      roles: ["investor", "startup"],
     },
     {
-      label: 'Messages',
-      path: '/messages',
+      label: "Messages",
+      path: "/messages",
       icon: <MessageSquare size={20} />,
-      roles: ['investor', 'startup'],
+      roles: ["investor", "startup"],
     },
     {
-      label: 'Verification',
-      path: '/verification',
+      label: "Verification",
+      path: "/verification",
       icon: <FileCheck size={20} />,
-      roles: ['investor', 'startup'],
+      roles: ["investor", "startup"],
     },
     {
-      label: 'Admin Panel',
-      path: '/admin',
+      label: "Admin Panel",
+      path: "/admin",
       icon: <Users size={20} />,
-      roles: ['admin'],
+      roles: ["admin"],
     },
     {
-      label: 'Settings',
-      path: '/settings',
+      label: "Settings",
+      path: "/settings",
       icon: <Settings size={20} />,
-      roles: ['investor', 'startup', 'admin'],
+      roles: ["investor", "startup", "admin"],
     },
   ];
 
   const filteredNavItems = navItems.filter((item) =>
-    profile ? item.roles.includes(profile.role) : false
+    profile ? item.roles.includes(profile.role) : false,
   );
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 bg-slate-900/50 backdrop-blur-xl border-r border-slate-800 flex flex-col">
       <div className="p-6">
-        <Link to="/dashboard" className="flex items-center space-x-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg" />
+        <Link
+          to="/dashboard"
+          className="flex items-center gap-2 cursor-pointer"
+        >
+          <Zap className="w-7 h-7 text-blue-500 drop-shadow-[0_0_6px_#3B82F6] " />
           <span className="text-xl font-bold text-white">Invest Vault</span>
         </Link>
       </div>
@@ -108,9 +112,10 @@ export function Sidebar() {
               key={item.path}
               to={item.path}
               className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-200
-                ${isActive
-                  ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                ${
+                  isActive
+                    ? "bg-blue-600/20 text-blue-400 border border-blue-500/30"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
                 }`}
             >
               {item.icon}

@@ -35,6 +35,13 @@ export function Bids() {
   const [bids, setBids] = useState<BidWithStartup[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedBid, setSelectedBid] = useState<any>(null);
+  const [actionType, setActionType] = useState<"accepted" | "rejected" | null>(
+    null,
+  );
+  const [messageText, setMessageText] = useState("");
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -46,25 +53,25 @@ export function Bids() {
 
     let fetchedBids: any[] = [];
 
-    /*  INVESTOR VIEW  */
+    /* INVESTOR VIEW */
 
     if (profile.role === "investor") {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("bids")
         .select(
           `
           *,
-          startup:startups(id, company_name, logo_url),
-          investor:profiles!bids_investor_id_fkey(id, full_name, email)
+          startup:startups(id,company_name,logo_url),
+          investor:profiles!bids_investor_id_fkey(id,full_name,email)
         `,
         )
         .eq("investor_id", profile.id)
         .order("created_at", { ascending: false });
 
-      if (!error && data) fetchedBids = data;
+      if (data) fetchedBids = data;
     }
 
-    /*  STARTUP VIEW  */
+    /* STARTUP VIEW */
 
     if (profile.role === "startup") {
       const { data: startups } = await supabase
@@ -73,37 +80,58 @@ export function Bids() {
         .eq("founder_id", profile.id);
 
       if (startups && startups.length > 0) {
-        const startupIds = startups.map((s) => s.id);
+        const startupIds = startups.map((s: any) => s.id);
 
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from("bids")
           .select(
             `
             *,
-            startup:startups(id, company_name, logo_url),
-            investor:profiles!bids_investor_id_fkey(id, full_name, email)
+            startup:startups(id,company_name,logo_url),
+            investor:profiles!bids_investor_id_fkey(id,full_name,email)
           `,
           )
           .in("startup_id", startupIds)
           .order("created_at", { ascending: false });
 
-        if (!error && data) fetchedBids = data;
+        if (data) fetchedBids = data;
       }
     }
-
-    console.log("Fetched Bids:", fetchedBids);
 
     setBids(fetchedBids);
     setLoading(false);
   };
 
-  const updateBidStatus = async (bidId: string, status: string) => {
-    const { error } = await supabase
-      .from("bids")
-      .update({ status })
-      .eq("id", bidId);
+  const openModal = (bid: any, type: "accepted" | "rejected") => {
+    setSelectedBid(bid);
+    setActionType(type);
+    setMessageText("");
+    setModalOpen(true);
+  };
 
-    if (!error) loadBids();
+  const handleSubmit = async () => {
+    if (!selectedBid || !actionType || !messageText.trim()) return;
+
+    /* update bid status */
+
+    await supabase
+      .from("bids")
+      .update({ status: actionType })
+      .eq("id", selectedBid.id);
+
+    /* send message */
+
+    await supabase.from("chat_messages").insert({
+      sender_id: profile?.id,
+      receiver_id: selectedBid.investor_id,
+      message: messageText,
+      read: false,
+    });
+
+    setModalOpen(false);
+    setMessageText("");
+
+    loadBids();
   };
 
   if (loading) {
@@ -160,28 +188,21 @@ export function Bids() {
                         </h3>
 
                         <p className="text-sm text-slate-400">
-                          Investor:{" "}
-                          {bid.investor?.full_name || "Unknown Investor"}
+                          Investor: {bid.investor?.full_name || "Unknown"}
                         </p>
                       </div>
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                       <div>
-                        <p className="text-sm text-slate-400">
-                          Investment Amount
-                        </p>
-
+                        <p className="text-sm text-slate-400">Amount</p>
                         <p className="text-lg font-semibold text-white">
                           ${Number(bid.amount).toLocaleString()}
                         </p>
                       </div>
 
                       <div>
-                        <p className="text-sm text-slate-400">
-                          Equity Requested
-                        </p>
-
+                        <p className="text-sm text-slate-400">Equity</p>
                         <p className="text-lg font-semibold text-white">
                           {bid.equity_requested}%
                         </p>
@@ -189,7 +210,6 @@ export function Bids() {
 
                       <div>
                         <p className="text-sm text-slate-400">Status</p>
-
                         <span className="text-white capitalize">
                           {bid.status}
                         </span>
@@ -197,7 +217,6 @@ export function Bids() {
 
                       <div>
                         <p className="text-sm text-slate-400">Date</p>
-
                         <p className="text-sm text-white">
                           {new Date(bid.created_at).toLocaleDateString()}
                         </p>
@@ -215,7 +234,7 @@ export function Bids() {
                     <div className="flex flex-col space-y-2 ml-4">
                       <Button
                         size="sm"
-                        onClick={() => updateBidStatus(bid.id, "accepted")}
+                        onClick={() => openModal(bid, "accepted")}
                       >
                         Accept
                       </Button>
@@ -223,7 +242,7 @@ export function Bids() {
                       <Button
                         size="sm"
                         variant="danger"
-                        onClick={() => updateBidStatus(bid.id, "rejected")}
+                        onClick={() => openModal(bid, "rejected")}
                       >
                         Reject
                       </Button>
@@ -243,6 +262,38 @@ export function Bids() {
           </div>
         )}
       </div>
+
+      {/* MESSAGE MODAL */}
+
+      {modalOpen && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="bg-slate-900 p-6 rounded-xl w-full max-w-md">
+            <h2 className="text-lg font-semibold text-white mb-4">
+              {actionType === "accepted"
+                ? "Accept Bid Message"
+                : "Reject Bid Message"}
+            </h2>
+
+            <textarea
+              value={messageText}
+              onChange={(e) => setMessageText(e.target.value)}
+              placeholder="Write message to investor..."
+              className="w-full p-3 bg-slate-800 border border-slate-700 rounded-lg text-white mb-4"
+              rows={4}
+            />
+
+            <div className="flex justify-end space-x-3">
+              <Button variant="ghost" onClick={() => setModalOpen(false)}>
+                Cancel
+              </Button>
+
+              <Button disabled={!messageText.trim()} onClick={handleSubmit}>
+                Send Message
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

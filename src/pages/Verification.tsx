@@ -18,7 +18,7 @@ interface KYCDocument {
   uploaded_at: string;
 }
 
-// ─── Step Indicator ───────────────────────────────────────────────────────────
+// Step Indicator Component
 function StepIndicator({ currentStep }: { currentStep: 1 | 2 }) {
   const steps = [
     { number: 1, label: 'OTP Verification', sublabel: 'Verify your email' },
@@ -58,7 +58,7 @@ function StepIndicator({ currentStep }: { currentStep: 1 | 2 }) {
   );
 }
 
-// ─── OTP Input ────────────────────────────────────────────────────────────────
+//OTP Input Component
 function OTPInput({ value, onChange, disabled }: {
   value: string;
   onChange: (val: string) => void;

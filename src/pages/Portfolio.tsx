@@ -7,67 +7,73 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
-interface InvestmentWithStartup {
+interface AcceptedBid {
   id: string;
   amount: number;
-  equity: number;
-  payment_status: string;
+  equity_requested: number;
   created_at: string;
   startup: {
     id: string;
     company_name: string;
     logo_url: string;
     industry: string;
+    funding_goal: number;
+    current_funding: number;
   };
 }
 
 export function Portfolio() {
   const { profile } = useAuth();
-  const [investments, setInvestments] = useState<InvestmentWithStartup[]>([]);
+  const [bids, setBids] = useState<AcceptedBid[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (profile) {
-      loadInvestments();
-    }
+    if (profile) loadAcceptedBids();
   }, [profile]);
 
-  const loadInvestments = async () => {
+  const loadAcceptedBids = async () => {
     if (!profile) return;
 
-    const { data } = await supabase
-      .from('investments')
+    const { data, error } = await supabase
+      .from('bids')
       .select(`
-        *,
-        startup:startups(id, company_name, logo_url, industry)
+        id,
+        amount,
+        equity_requested,
+        created_at,
+        startup:startups(id, company_name, logo_url, industry, funding_goal, current_funding)
       `)
       .eq('investor_id', profile.id)
-      .eq('payment_status', 'completed')
+      .eq('status', 'accepted')
       .order('created_at', { ascending: false });
 
-    if (data) {
-      setInvestments(data as unknown as InvestmentWithStartup[]);
+    if (!error && data) {
+      setBids(data as unknown as AcceptedBid[]);
     }
-
     setLoading(false);
   };
 
-  const totalInvested = investments.reduce((sum, inv) => sum + Number(inv.amount), 0);
-  const avgEquity = investments.length > 0
-    ? investments.reduce((sum, inv) => sum + Number(inv.equity), 0) / investments.length
-    : 0;
+  const totalInvested = bids.reduce((sum, b) => sum + Number(b.amount), 0);
+  const totalBids = bids.length;
+  const avgEquity =
+    totalBids > 0
+      ? bids.reduce((sum, b) => sum + Number(b.equity_requested), 0) / totalBids
+      : 0;
 
-  const industryData = investments.reduce((acc, inv) => {
-    const industry = inv.startup.industry;
-    const existing = acc.find((item) => item.name === industry);
-    if (existing) {
-      existing.value += Number(inv.amount);
-    } else {
-      acc.push({ name: industry, value: Number(inv.amount) });
-    }
-    return acc;
-  }, [] as { name: string; value: number }[]);
+  const industryData = bids.reduce(
+    (acc, b) => {
+      const industry = b.startup.industry;
+      const existing = acc.find((item) => item.name === industry);
+      if (existing) {
+        existing.value += Number(b.amount);
+      } else {
+        acc.push({ name: industry, value: Number(b.amount) });
+      }
+      return acc;
+    },
+    [] as { name: string; value: number }[]
+  );
 
   const COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444'];
 
@@ -108,8 +114,8 @@ export function Portfolio() {
                 <TrendingUp className="text-purple-400" size={24} />
               </div>
               <div>
-                <p className="text-sm text-slate-400">Active Investments</p>
-                <p className="text-2xl font-bold text-white">{investments.length}</p>
+                <p className="text-sm text-slate-400">No. of Investments</p>
+                <p className="text-2xl font-bold text-white">{totalBids}</p>
               </div>
             </div>
           </Card>
@@ -127,7 +133,7 @@ export function Portfolio() {
           </Card>
         </div>
 
-        {investments.length > 0 && (
+        {bids.length > 0 && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             <Card className="p-6">
               <h3 className="text-lg font-semibold text-white mb-4">Portfolio Distribution</h3>
@@ -140,14 +146,13 @@ export function Portfolio() {
                     labelLine={false}
                     label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                     outerRadius={80}
-                    fill="#8884d8"
                     dataKey="value"
                   >
-                    {industryData.map((entry, index) => (
+                    {industryData.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip formatter={(value: number) => [`$${value.toLocaleString()}`, 'Amount']} />
                 </RechartsPieChart>
               </ResponsiveContainer>
             </Card>
@@ -158,10 +163,7 @@ export function Portfolio() {
                 {industryData.map((item, index) => (
                   <div key={item.name} className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
-                      <div
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                      />
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
                       <span className="text-slate-300">{item.name}</span>
                     </div>
                     <span className="text-white font-semibold">${item.value.toLocaleString()}</span>
@@ -174,7 +176,8 @@ export function Portfolio() {
 
         <div>
           <h2 className="text-xl font-bold text-white mb-4">All Investments</h2>
-          {investments.length === 0 ? (
+
+          {bids.length === 0 ? (
             <Card className="p-12 text-center">
               <Wallet className="text-slate-600 mx-auto mb-4" size={48} />
               <h3 className="text-xl font-semibold text-white mb-2">No Investments Yet</h3>
@@ -182,29 +185,27 @@ export function Portfolio() {
             </Card>
           ) : (
             <div className="space-y-4">
-              {investments.map((investment) => (
-                <Card
-                  key={investment.id}
-                  hover
-                  onClick={() => navigate(`/startup/${investment.startup.id}`)}
-                  className="p-6"
-                >
+              {bids.map((bid) => (
+                <Card key={bid.id} hover onClick={() => navigate(`/startup/${bid.startup.id}`)} className="p-6">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
-                      {investment.startup.logo_url ? (
-                        <img src={investment.startup.logo_url} alt={investment.startup.company_name} className="w-12 h-12 rounded-lg" />
+                      {bid.startup.logo_url ? (
+                        <img src={bid.startup.logo_url} alt={bid.startup.company_name} className="w-12 h-12 rounded-lg object-cover" />
                       ) : (
                         <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg" />
                       )}
                       <div>
-                        <h3 className="text-lg font-semibold text-white">{investment.startup.company_name}</h3>
-                        <p className="text-sm text-slate-400">{investment.startup.industry}</p>
+                        <h3 className="text-lg font-semibold text-white">{bid.startup.company_name}</h3>
+                        <p className="text-sm text-slate-400">{bid.startup.industry}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Accepted on {new Date(bid.created_at).toLocaleDateString()}
+                        </p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm text-slate-400">Investment</p>
-                      <p className="text-lg font-semibold text-white">${Number(investment.amount).toLocaleString()}</p>
-                      <p className="text-sm text-blue-400">{investment.equity}% equity</p>
+                    <div className="text-right space-y-1">
+                      <p className="text-sm text-slate-400">Amount Invested</p>
+                      <p className="text-lg font-semibold text-white">${Number(bid.amount).toLocaleString()}</p>
+                      <p className="text-sm text-blue-400">{bid.equity_requested}% equity</p>
                     </div>
                   </div>
                 </Card>

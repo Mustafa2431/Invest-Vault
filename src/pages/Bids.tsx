@@ -233,6 +233,8 @@ Explore more startups: ${window.location.origin}/discover
   };
 
   const handleAcceptBid = async (bid: BidWithStartup) => {
+    if (!user) return;
+
     setActionLoading(bid.id);
 
     const { error: bidError } = await supabase
@@ -241,7 +243,26 @@ Explore more startups: ${window.location.origin}/discover
       .eq("id", bid.id);
 
     if (!bidError) {
-      // Recalculate current_funding from all accepted bids for this startup
+      /* ---------------- CHAT MESSAGE SEND ---------------- */
+
+      await supabase.from("chat_messages").insert({
+        sender_id: user.id,
+        receiver_id: bid.investor_id,
+        message: `🎉 Congratulations!
+
+Your bid for **${bid.startup.company_name}** has been accepted.
+
+Investment Amount: $${Number(bid.amount).toLocaleString()}
+Equity Stake: ${bid.equity_requested}%
+
+The founder will contact you soon for the next steps.
+
+– Invest Vault`,
+        read: false,
+      });
+
+      /* ---------------- UPDATE FUNDING ---------------- */
+
       const { data: acceptedBids } = await supabase
         .from("bids")
         .select("amount")
@@ -258,7 +279,10 @@ Explore more startups: ${window.location.origin}/discover
         .update({ current_funding: newFunding })
         .eq("id", bid.startup.id);
 
+      /* ---------------- SEND EMAIL ---------------- */
+
       await sendEmail("accepted", bid);
+
       loadBids();
     }
 

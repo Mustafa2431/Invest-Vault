@@ -68,9 +68,9 @@ export function MyStartup() {
       funding_goal: startup.funding_goal.toString(),
       valuation: startup.valuation.toString(),
       equity_offered: startup.equity_offered?.toString() || "",
-      revenue: startup.revenue.toString(),
-      monthly_growth: startup.monthly_growth.toString(),
-      team_size: startup.team_size.toString(),
+      revenue: startup.revenue?.toString() || "",
+      monthly_growth: startup.monthly_growth?.toString() || "",
+      team_size: startup.team_size?.toString() || "1",
       business_model: startup.business_model || "",
       market_size: startup.market_size || "",
     });
@@ -84,15 +84,21 @@ export function MyStartup() {
     try {
       const startupData = {
         ...formData,
+
         founder_id: profile.id,
+
         funding_goal: parseFloat(formData.funding_goal),
         valuation: parseFloat(formData.valuation),
+
         equity_offered: formData.equity_offered
           ? parseFloat(formData.equity_offered)
           : null,
+
         revenue: parseFloat(formData.revenue || "0"),
         monthly_growth: parseFloat(formData.monthly_growth || "0"),
+
         team_size: parseInt(formData.team_size),
+
         status: "active",
       };
 
@@ -114,6 +120,7 @@ export function MyStartup() {
       }
 
       setEditingStartup(null);
+
       setFormData({
         company_name: "",
         tagline: "",
@@ -154,7 +161,8 @@ export function MyStartup() {
   return (
     <DashboardLayout>
       <div className="p-8 max-w-5xl mx-auto space-y-10">
-        {/* Startups List */}
+        {/* STARTUPS LIST */}
+
         <div>
           <h1 className="text-3xl font-bold text-white mb-6">My Startups</h1>
 
@@ -175,6 +183,12 @@ export function MyStartup() {
                   Stage: {s.stage} • Industry: {s.industry}
                 </div>
 
+                <div className="text-sm text-slate-400 mt-3 space-y-1">
+                  <p>Revenue: ${s.revenue}</p>
+                  <p>Monthly Growth: {s.monthly_growth}%</p>
+                  <p>Team Size: {s.team_size}</p>
+                </div>
+
                 <Button
                   onClick={() => handleEdit(s)}
                   className="mt-4"
@@ -187,11 +201,13 @@ export function MyStartup() {
           </div>
         </div>
 
-        {/* Create / Edit Startup */}
+        {/* CREATE / EDIT FORM */}
+
         <Card className="p-8 space-y-6">
           <h2 className="text-2xl text-white font-bold">
             {editingStartup ? "Edit Startup" : "Add New Startup"}
           </h2>
+
           <div className="grid md:grid-cols-2 gap-6">
             <Input
               label="Company Name"
@@ -200,6 +216,7 @@ export function MyStartup() {
                 setFormData({ ...formData, company_name: e.target.value })
               }
             />
+
             <Input
               label="Tagline"
               value={formData.tagline}
@@ -211,12 +228,31 @@ export function MyStartup() {
 
           <div>
             <label className="text-sm text-slate-300">Description</label>
+
             <textarea
               className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white"
               rows={4}
               value={formData.description}
               onChange={(e) =>
                 setFormData({ ...formData, description: e.target.value })
+              }
+            />
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            <Input
+              label="Business Model"
+              value={formData.business_model}
+              onChange={(e) =>
+                setFormData({ ...formData, business_model: e.target.value })
+              }
+            />
+
+            <Input
+              label="Market Size"
+              value={formData.market_size}
+              onChange={(e) =>
+                setFormData({ ...formData, market_size: e.target.value })
               }
             />
           </div>
@@ -235,6 +271,7 @@ export function MyStartup() {
                 setFormData({ ...formData, industry: e.target.value })
               }
             />
+
             <Select
               label="Stage"
               value={formData.stage}
@@ -274,6 +311,35 @@ export function MyStartup() {
               value={formData.equity_offered}
               onChange={(e) =>
                 setFormData({ ...formData, equity_offered: e.target.value })
+              }
+            />
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6">
+            <Input
+              label="Team Size"
+              type="number"
+              value={formData.team_size}
+              onChange={(e) =>
+                setFormData({ ...formData, team_size: e.target.value })
+              }
+            />
+
+            <Input
+              label="Revenue ($)"
+              type="number"
+              value={formData.revenue}
+              onChange={(e) =>
+                setFormData({ ...formData, revenue: e.target.value })
+              }
+            />
+
+            <Input
+              label="Monthly Growth (%)"
+              type="number"
+              value={formData.monthly_growth}
+              onChange={(e) =>
+                setFormData({ ...formData, monthly_growth: e.target.value })
               }
             />
           </div>

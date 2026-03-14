@@ -1,11 +1,17 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Wallet, TrendingUp, PieChart } from 'lucide-react';
-import { DashboardLayout } from '../components/layout/DashboardLayout';
-import { Card } from '../components/ui/Card';
-import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
-import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Wallet, TrendingUp, PieChart } from "lucide-react";
+import { DashboardLayout } from "../components/layout/DashboardLayout";
+import { Card } from "../components/ui/Card";
+import { useAuth } from "../contexts/AuthContext";
+import { supabase } from "../lib/supabase";
+import {
+  PieChart as RechartsPieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+} from "recharts";
 
 interface AcceptedBid {
   id: string;
@@ -36,17 +42,19 @@ export function Portfolio() {
     if (!profile) return;
 
     const { data, error } = await supabase
-      .from('bids')
-      .select(`
+      .from("bids")
+      .select(
+        `
         id,
         amount,
         equity_requested,
         created_at,
         startup:startups(id, company_name, logo_url, industry, funding_goal, current_funding)
-      `)
-      .eq('investor_id', profile.id)
-      .eq('status', 'accepted')
-      .order('created_at', { ascending: false });
+      `,
+      )
+      .eq("investor_id", profile.id)
+      .eq("status", "accepted")
+      .order("created_at", { ascending: false });
 
     if (!error && data) {
       setBids(data as unknown as AcceptedBid[]);
@@ -72,10 +80,10 @@ export function Portfolio() {
       }
       return acc;
     },
-    [] as { name: string; value: number }[]
+    [] as { name: string; value: number }[],
   );
 
-  const COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444'];
+  const COLORS = ["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444"];
 
   if (loading) {
     return (
@@ -91,8 +99,12 @@ export function Portfolio() {
     <DashboardLayout>
       <div className="p-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Investment Portfolio</h1>
-          <p className="text-slate-400">Track your investments and performance</p>
+          <h1 className="text-3xl font-bold text-white mb-2">
+            Investment Portfolio
+          </h1>
+          <p className="text-slate-400">
+            Track your investments and performance
+          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -103,7 +115,9 @@ export function Portfolio() {
               </div>
               <div>
                 <p className="text-sm text-slate-400">Total Invested</p>
-                <p className="text-2xl font-bold text-white">${totalInvested.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-white">
+                  ${totalInvested.toLocaleString()}
+                </p>
               </div>
             </div>
           </Card>
@@ -127,7 +141,9 @@ export function Portfolio() {
               </div>
               <div>
                 <p className="text-sm text-slate-400">Avg Equity</p>
-                <p className="text-2xl font-bold text-white">{avgEquity.toFixed(1)}%</p>
+                <p className="text-2xl font-bold text-white">
+                  {avgEquity.toFixed(1)}%
+                </p>
               </div>
             </div>
           </Card>
@@ -136,7 +152,9 @@ export function Portfolio() {
         {bids.length > 0 && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             <Card className="p-6">
-              <h3 className="text-lg font-semibold text-white mb-4">Portfolio Distribution</h3>
+              <h3 className="text-lg font-semibold text-white mb-4">
+                Portfolio Distribution
+              </h3>
               <ResponsiveContainer width="100%" height={300}>
                 <RechartsPieChart>
                   <Pie
@@ -144,29 +162,51 @@ export function Portfolio() {
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    label={({ name, percent }) =>
+                      `${name} ${(percent * 100).toFixed(0)}%`
+                    }
                     outerRadius={80}
                     dataKey="value"
                   >
                     {industryData.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={COLORS[index % COLORS.length]}
+                      />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value: number) => [`$${value.toLocaleString()}`, 'Amount']} />
+                  <Tooltip
+                    formatter={(value: number) => [
+                      `$${value.toLocaleString()}`,
+                      "Amount",
+                    ]}
+                  />
                 </RechartsPieChart>
               </ResponsiveContainer>
             </Card>
 
             <Card className="p-6">
-              <h3 className="text-lg font-semibold text-white mb-4">Investment Summary</h3>
+              <h3 className="text-lg font-semibold text-white mb-4">
+                Investment Summary
+              </h3>
               <div className="space-y-3">
                 {industryData.map((item, index) => (
-                  <div key={item.name} className="flex items-center justify-between">
+                  <div
+                    key={item.name}
+                    className="flex items-center justify-between"
+                  >
                     <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{
+                          backgroundColor: COLORS[index % COLORS.length],
+                        }}
+                      />
                       <span className="text-slate-300">{item.name}</span>
                     </div>
-                    <span className="text-white font-semibold">${item.value.toLocaleString()}</span>
+                    <span className="text-white font-semibold">
+                      ${item.value.toLocaleString()}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -180,32 +220,54 @@ export function Portfolio() {
           {bids.length === 0 ? (
             <Card className="p-12 text-center">
               <Wallet className="text-slate-600 mx-auto mb-4" size={48} />
-              <h3 className="text-xl font-semibold text-white mb-2">No Investments Yet</h3>
-              <p className="text-slate-400">Start building your portfolio by investing in startups</p>
+              <h3 className="text-xl font-semibold text-white mb-2">
+                No Investments Yet
+              </h3>
+              <p className="text-slate-400">
+                Start building your portfolio by investing in startups
+              </p>
             </Card>
           ) : (
             <div className="space-y-4">
               {bids.map((bid) => (
-                <Card key={bid.id} hover onClick={() => navigate(`/startup/${bid.startup.id}`)} className="p-6">
+                <Card
+                  key={bid.id}
+                  hover
+                  onClick={() => navigate(`/startup/${bid.startup.id}`)}
+                  className="p-6"
+                >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
                       {bid.startup.logo_url ? (
-                        <img src={bid.startup.logo_url} alt={bid.startup.company_name} className="w-12 h-12 rounded-lg object-cover" />
+                        <img
+                          src={bid.startup.logo_url}
+                          alt={bid.startup.company_name}
+                          className="w-12 h-12 rounded-lg object-cover"
+                        />
                       ) : (
                         <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg" />
                       )}
                       <div>
-                        <h3 className="text-lg font-semibold text-white">{bid.startup.company_name}</h3>
-                        <p className="text-sm text-slate-400">{bid.startup.industry}</p>
+                        <h3 className="text-lg font-semibold text-white">
+                          {bid.startup.company_name}
+                        </h3>
+                        <p className="text-sm text-slate-400">
+                          {bid.startup.industry}
+                        </p>
                         <p className="text-xs text-slate-500 mt-0.5">
-                          Accepted on {new Date(bid.created_at).toLocaleDateString()}
+                          Accepted on{" "}
+                          {new Date(bid.created_at).toLocaleDateString()}
                         </p>
                       </div>
                     </div>
                     <div className="text-right space-y-1">
                       <p className="text-sm text-slate-400">Amount Invested</p>
-                      <p className="text-lg font-semibold text-white">${Number(bid.amount).toLocaleString()}</p>
-                      <p className="text-sm text-blue-400">{bid.equity_requested}% equity</p>
+                      <p className="text-lg font-semibold text-white">
+                        ${Number(bid.amount).toLocaleString()}
+                      </p>
+                      <p className="text-sm text-blue-400">
+                        {bid.equity_requested}% equity
+                      </p>
                     </div>
                   </div>
                 </Card>

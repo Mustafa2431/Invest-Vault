@@ -11,6 +11,7 @@ import {
   MessageSquare,
   Mail,
   Loader,
+  AlertCircle,
 } from "lucide-react";
 import { DashboardLayout } from "../components/layout/DashboardLayout";
 import { Card } from "../components/ui/Card";
@@ -28,6 +29,7 @@ interface BidWithStartup {
     id: string;
     company_name: string;
     logo_url: string;
+    current_funding: number;
   };
   investor?: {
     id: string;
@@ -42,6 +44,7 @@ export function Bids() {
   const { profile, user } = useAuth();
   const [bids, setBids] = useState<BidWithStartup[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [rejectingBidId, setRejectingBidId] = useState<string | null>(null);
   const [rejectMessage, setRejectMessage] = useState("");
   const [emailStatus, setEmailStatus] = useState<Record<string, EmailStatus>>(
@@ -56,36 +59,111 @@ export function Bids() {
 
   const loadBids = async () => {
     if (!profile) return;
+    setError(null);
+    setLoading(true);
 
-    if (profile.role === "investor") {
-      const { data } = await supabase
-        .from("bids")
-        .select(`*, startup:startups(id, company_name, logo_url)`)
-        .eq("investor_id", profile.id)
-        .order("created_at", { ascending: false });
-
-      if (data) setBids(data as unknown as BidWithStartup[]);
-    } else if (profile.role === "startup") {
-      const { data: startupData } = await supabase
-        .from("startups")
-        .select("id")
-        .eq("founder_id", profile.id)
-        .maybeSingle();
-
-      if (startupData) {
-        const { data } = await supabase
+    try {
+      if (profile.role === "investor") {
+        // 1. Fetch all bids by this investor
+        const { data: bidsData, error: bidsError } = await supabase
           .from("bids")
-          .select(
-            `*, startup:startups(id, company_name, logo_url), investor:profiles(id, full_name, email)`,
-          )
-          .eq("startup_id", startupData.id)
+          .select("*")
+          .eq("investor_id", profile.id)
           .order("created_at", { ascending: false });
 
-        if (data) setBids(data as unknown as BidWithStartup[]);
-      }
-    }
+        if (bidsError) throw new Error(bidsError.message);
+        if (!bidsData || bidsData.length === 0) {
+          setBids([]);
+          return;
+        }
 
-    setLoading(false);
+        // 2. Fetch all relevant startups in one query
+        const startupIds = [...new Set(bidsData.map((b) => b.startup_id))];
+        const { data: startupsData, error: startupsError } = await supabase
+          .from("startups")
+          .select("id, company_name, logo_url, current_funding")
+          .in("id", startupIds);
+
+        if (startupsError) throw new Error(startupsError.message);
+
+        const startupMap = Object.fromEntries(
+          (startupsData || []).map((s) => [s.id, s]),
+        );
+
+        // 3. Merge
+        const merged: BidWithStartup[] = bidsData.map((bid) => ({
+          ...bid,
+          startup: startupMap[bid.startup_id] || {
+            id: bid.startup_id,
+            company_name: "Unknown Startup",
+            logo_url: "",
+            current_funding: 0,
+          },
+        }));
+
+        setBids(merged);
+      } else if (profile.role === "startup") {
+        // 1. Get ALL startups by this founder (not just one)
+        const { data: myStartups, error: startupsError } = await supabase
+          .from("startups")
+          .select("id, company_name, logo_url, current_funding")
+          .eq("founder_id", profile.id);
+
+        if (startupsError) throw new Error(startupsError.message);
+        if (!myStartups || myStartups.length === 0) {
+          setBids([]);
+          return;
+        }
+
+        const myStartupIds = myStartups.map((s) => s.id);
+        const startupMap = Object.fromEntries(myStartups.map((s) => [s.id, s]));
+
+        // 2. Fetch all bids on ALL of this founder's startups
+        const { data: bidsData, error: bidsError } = await supabase
+          .from("bids")
+          .select("*")
+          .in("startup_id", myStartupIds)
+          .order("created_at", { ascending: false });
+
+        if (bidsError) throw new Error(bidsError.message);
+        if (!bidsData || bidsData.length === 0) {
+          setBids([]);
+          return;
+        }
+
+        // 3. Fetch all investor profiles in one query
+        const investorIds = [...new Set(bidsData.map((b) => b.investor_id))];
+        const { data: investorsData, error: investorsError } = await supabase
+          .from("profiles")
+          .select("id, full_name, email")
+          .in("id", investorIds);
+
+        if (investorsError) throw new Error(investorsError.message);
+
+        const investorMap = Object.fromEntries(
+          (investorsData || []).map((inv) => [inv.id, inv]),
+        );
+
+        // 4. Merge everything
+        const merged: BidWithStartup[] = bidsData.map((bid) => ({
+          ...bid,
+          startup: startupMap[bid.startup_id] || {
+            id: bid.startup_id,
+            company_name: "Unknown Startup",
+            logo_url: "",
+            current_funding: 0,
+          },
+          investor: investorMap[bid.investor_id] || undefined,
+        }));
+
+        setBids(merged);
+      }
+    } catch (err) {
+      console.error("loadBids error:", err);
+      setError(err instanceof Error ? err.message : "Failed to load bids");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const APPS_SCRIPT_URL =
@@ -100,7 +178,6 @@ export function Bids() {
     setEmailStatus((prev) => ({ ...prev, [bid.id]: "sending" }));
 
     const isAccepted = type === "accepted";
-
     const subject = isAccepted
       ? `🎉 Your bid on ${bid.startup.company_name} has been accepted!`
       : `Update on your bid for ${bid.startup.company_name}`;
@@ -137,18 +214,13 @@ Explore more startups: ${window.location.origin}/discover
     try {
       const res = await fetch(APPS_SCRIPT_URL, {
         method: "POST",
-        body: JSON.stringify({
-          to_email: bid.investor.email,
-          subject,
-          body,
-        }),
+        body: JSON.stringify({ to_email: bid.investor.email, subject, body }),
       });
-
       const data = await res.json();
       if (data.success) {
         setEmailStatus((prev) => ({ ...prev, [bid.id]: "sent" }));
       } else {
-        throw new Error("Failed");
+        throw new Error("Email send failed");
       }
     } catch (err) {
       console.error(err);
@@ -163,13 +235,30 @@ Explore more startups: ${window.location.origin}/discover
   const handleAcceptBid = async (bid: BidWithStartup) => {
     setActionLoading(bid.id);
 
-    const { error } = await supabase
+    const { error: bidError } = await supabase
       .from("bids")
       .update({ status: "accepted" })
       .eq("id", bid.id);
 
-    if (!error) {
-      await sendEmail("accepted", bid); // auto-send on accept
+    if (!bidError) {
+      // Recalculate current_funding from all accepted bids for this startup
+      const { data: acceptedBids } = await supabase
+        .from("bids")
+        .select("amount")
+        .eq("startup_id", bid.startup.id)
+        .eq("status", "accepted");
+
+      const newFunding = (acceptedBids || []).reduce(
+        (sum, b) => sum + Number(b.amount),
+        0,
+      );
+
+      await supabase
+        .from("startups")
+        .update({ current_funding: newFunding })
+        .eq("id", bid.startup.id);
+
+      await sendEmail("accepted", bid);
       loadBids();
     }
 
@@ -196,7 +285,6 @@ Explore more startups: ${window.location.origin}/discover
       }
 
       await sendEmail("rejected", bid, rejectMessage.trim() || undefined);
-
       setRejectingBidId(null);
       setRejectMessage("");
       loadBids();
@@ -205,7 +293,6 @@ Explore more startups: ${window.location.origin}/discover
     setActionLoading(null);
   };
 
-  // ─── Email status badge component ──────────────────────────────────────────
   const EmailBadge = ({ bidId }: { bidId: string }) => {
     const status = emailStatus[bidId];
     if (!status || status === "idle") return null;
@@ -262,7 +349,24 @@ Explore more startups: ${window.location.origin}/discover
           </p>
         </div>
 
-        {bids.length === 0 ? (
+        {/* Error banner */}
+        {error && (
+          <div className="flex items-center gap-3 p-4 mb-6 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400">
+            <AlertCircle size={20} className="flex-shrink-0" />
+            <div className="flex-1">
+              <p className="font-medium">Failed to load bids</p>
+              <p className="text-sm text-red-400/80">{error}</p>
+            </div>
+            <button
+              onClick={loadBids}
+              className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 rounded-lg text-sm transition"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {!error && bids.length === 0 ? (
           <Card className="p-12 text-center">
             <TrendingUp className="text-slate-600 mx-auto mb-4" size={48} />
             <h3 className="text-xl font-semibold text-white mb-2">
@@ -287,20 +391,20 @@ Explore more startups: ${window.location.origin}/discover
                 <Card key={bid.id} className="p-6">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
-                      {/* Header row */}
+                      {/* Header */}
                       <div className="flex items-center space-x-4 mb-4">
-                        {bid.startup.logo_url ? (
+                        {bid.startup?.logo_url ? (
                           <img
                             src={bid.startup.logo_url}
                             alt={bid.startup.company_name}
-                            className="w-12 h-12 rounded-lg flex-shrink-0"
+                            className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
                           />
                         ) : (
                           <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex-shrink-0" />
                         )}
                         <div>
                           <h3 className="text-lg font-semibold text-white">
-                            {bid.startup.company_name}
+                            {bid.startup?.company_name ?? "Unknown Startup"}
                           </h3>
                           {bid.investor && (
                             <p className="text-sm text-slate-400">
@@ -347,10 +451,10 @@ Explore more startups: ${window.location.origin}/discover
                             )}
                             <span
                               className={`text-sm font-medium capitalize
-                              ${bid.status === "accepted" ? "text-green-400" : ""}
-                              ${bid.status === "rejected" ? "text-red-400" : ""}
-                              ${bid.status === "pending" ? "text-yellow-400" : ""}
-                            `}
+                                ${bid.status === "accepted" ? "text-green-400" : ""}
+                                ${bid.status === "rejected" ? "text-red-400" : ""}
+                                ${bid.status === "pending" ? "text-yellow-400" : ""}
+                              `}
                             >
                               {bid.status}
                             </span>
@@ -372,20 +476,18 @@ Explore more startups: ${window.location.origin}/discover
                         </div>
                       )}
 
-                      {/* Live email badge */}
                       <EmailBadge bidId={bid.id} />
 
-                      {/* Static badge for investor view */}
                       {profile?.role === "investor" &&
                         (bid.status === "accepted" ||
                           bid.status === "rejected") && (
                           <span
                             className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border mt-2
-                          ${
-                            bid.status === "accepted"
-                              ? "bg-green-600/10 border-green-600/20 text-green-400"
-                              : "bg-red-600/10 border-red-600/20 text-red-400"
-                          }`}
+                              ${
+                                bid.status === "accepted"
+                                  ? "bg-green-600/10 border-green-600/20 text-green-400"
+                                  : "bg-red-600/10 border-red-600/20 text-red-400"
+                              }`}
                           >
                             <Mail size={12} />
                             {bid.status === "accepted"
@@ -395,7 +497,7 @@ Explore more startups: ${window.location.origin}/discover
                         )}
                     </div>
 
-                    {/* Startup founder action buttons */}
+                    {/* Founder action buttons */}
                     {profile?.role === "startup" &&
                       bid.status === "pending" && (
                         <div className="flex flex-col space-y-2 flex-shrink-0">
@@ -446,7 +548,7 @@ Explore more startups: ${window.location.origin}/discover
         )}
       </div>
 
-      {/* ── Reject Modal ───────────────────────────────────────────── */}
+      {/* Reject Modal */}
       {rejectingBidId &&
         (() => {
           const bid = bids.find((b) => b.id === rejectingBidId);
@@ -457,7 +559,6 @@ Explore more startups: ${window.location.origin}/discover
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
               <Card className="w-full max-w-md shadow-2xl">
                 <div className="p-6">
-                  {/* Modal header */}
                   <div className="flex items-center gap-3 mb-5">
                     <div className="w-10 h-10 bg-red-600/20 rounded-full flex items-center justify-center flex-shrink-0">
                       <XCircle className="text-red-400" size={20} />
@@ -472,7 +573,6 @@ Explore more startups: ${window.location.origin}/discover
                     </div>
                   </div>
 
-                  {/* Email notice */}
                   <div className="flex items-start gap-2 p-3 bg-blue-600/10 border border-blue-500/20 rounded-lg mb-5">
                     <Mail
                       size={15}
@@ -487,11 +587,10 @@ Explore more startups: ${window.location.origin}/discover
                     </p>
                   </div>
 
-                  {/* Reason */}
                   <div className="mb-5">
                     <label className="block text-sm font-medium text-slate-300 mb-2">
-                      Reason for rejection
-                      <span className="text-slate-500 font-normal ml-1">
+                      Reason for rejection{" "}
+                      <span className="text-slate-500 font-normal">
                         (optional but recommended)
                       </span>
                     </label>
@@ -499,7 +598,7 @@ Explore more startups: ${window.location.origin}/discover
                       value={rejectMessage}
                       onChange={(e) => setRejectMessage(e.target.value)}
                       maxLength={500}
-                      placeholder="e.g. We're looking for a different investment structure, or we've already committed to another investor…"
+                      placeholder="e.g. We're looking for a different investment structure…"
                       className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                       rows={4}
                     />
@@ -508,7 +607,6 @@ Explore more startups: ${window.location.origin}/discover
                     </p>
                   </div>
 
-                  {/* Actions */}
                   <div className="flex gap-3">
                     <Button
                       variant="outline"
